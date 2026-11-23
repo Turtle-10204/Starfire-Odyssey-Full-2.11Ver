@@ -31,6 +31,7 @@ function setup() {
   spriteMetrics["attack"]    = measureSpriteMetrics(attackSpriteSheet, ATTACK_FRAME_COUNT);
   spriteMetrics["squat"]     = measureSpriteMetrics(squatSpriteSheet, SQUAT_FRAME_COUNT);
   spriteMetrics["squatMove"] = measureSpriteMetrics(squatMoveSpriteSheet, SQUAT_MOVE_FRAME_COUNT);
+  spriteMetrics["dead"]      = measureSpriteMetrics(deadSpriteSheet, DEAD_FRAME_COUNT);
 
   // 防止 Ctrl+D / Ctrl+S 等組合鍵觸發 Chrome 預設書籤或存檔視窗
   window.addEventListener("keydown", function(e) {
@@ -39,6 +40,140 @@ function setup() {
     }
   }, { passive: false });
 } 
+
+function drawDeathAnimation() {
+  let elapsed = millis() - deathAnimTimer;
+  // 階段時長（總計 1650ms）
+  const STAGE1_MS = 600; // 12 幀播 1 次 momi_dead.png
+  const STAGE3_MS = 650; // 透明圓形聚光燈定格停留
+  const STAGE4_MS = 180; // 透明圓形先向外微撐大 1.2 倍（蓄力）
+  const STAGE5_MS = 220; // 透明圓形俐落縮小到 0
+  const TOTAL_MS = STAGE1_MS + STAGE3_MS + STAGE4_MS + STAGE5_MS;
+
+  if (elapsed >= TOTAL_MS) {
+    finishDeathAnimation();
+    return;
+  }
+
+  if (elapsed < STAGE1_MS) {
+    deathAnimStage = 1;
+  } else if (elapsed < STAGE1_MS + STAGE3_MS) {
+    deathAnimStage = 3;
+  } else if (elapsed < STAGE1_MS + STAGE3_MS + STAGE4_MS) {
+    deathAnimStage = 4;
+  } else {
+    deathAnimStage = 5;
+  }
+
+  // 1. 繪製靜止的世界底層（背景、地形、敵人、平台）
+  if (currentWorld === 2) {
+    if (currentLevel === 4) {
+      background(window.isInMinerSupplyRoom ? "#2B1E16" : "#05050C");
+    } else if (currentLevel === 3 || currentLevel === 5) {
+      background("#2B190E");
+    } else {
+      background("#F6BD60");
+    }
+  } else if (currentLevel === 1 || is1_2Intro) {
+    background("#6b8cff");
+  } else if (currentLevel === 2) {
+    background("#0a0a12");
+  } else if (currentLevel === 3) {
+    background("#ff9a76");
+  } else {
+    background("#1a0505");
+  }
+
+  let z = getEffectiveViewZoom();
+  let viewWorldW = width / z;
+  let viewWorldH = height / z;
+  let mapOffsetY = viewWorldH - (levelMap.length * TILE_SIZE);
+
+  push();
+  scale(z);
+  translate(-cameraX, mapOffsetY);
+
+  drawWorld2AtmosphereAndLandmarks();
+  drawMap(viewWorldW);
+  drawMovingPlatforms();
+  drawEnemies();
+  if (currentLevel === 4) {
+    drawFireBars();
+    drawBossAndFireballs();
+  }
+  if (currentWorld === 2 && currentLevel === 5) {
+    drawSandwormBoss();
+  }
+
+  // 繪製角色死亡精靈圖（階段 1 播完 12 幀後定格於第 12 幀）
+  let deadFrameIdx = constrain(floor((elapsed / STAGE1_MS) * DEAD_FRAME_COUNT), 0, DEAD_FRAME_COUNT - 1);
+  let targetH = (powerLevel >= 2) ? 80 : 53;
+
+  if (deadSpriteSheet && deadSpriteSheet.width > 0) {
+    let fw = deadSpriteSheet.width / DEAD_FRAME_COUNT;
+    let fh = deadSpriteSheet.height;
+    let metric = spriteMetrics["dead"] || { contentHeight: fh, frameBottomPaddings: [] };
+    let contentH = (metric.contentHeight > 0) ? metric.contentHeight : fh;
+    let dispScale = targetH / contentH;
+    let hitboxBottomY = deathAnimY + prevHitboxH / 2;
+    let bottomPad = (metric.frameBottomPaddings && metric.frameBottomPaddings[deadFrameIdx]) || 0;
+    let drawCenterY = hitboxBottomY - (fh * dispScale) / 2 + bottomPad * dispScale;
+
+    push();
+    translate(deathAnimX, drawCenterY);
+    scale(facingDirection * dispScale, dispScale);
+    image(deadSpriteSheet, 0, 0, fw, fh, deadFrameIdx * fw, 0, fw, fh);
+    pop();
+  } else {
+    push();
+    translate(deathAnimX, deathAnimY);
+    noStroke();
+    fill("#E63946");
+    ellipse(0, 0, 32, targetH);
+    pop();
+  }
+
+  pop();
+
+  // HUD 畫在聚光燈黑幕下方
+  drawNSMBHUD();
+
+  // 2. 階段 2～5：全螢幕純黑遮罩中間挖出「透明圓形洞」（聚光燈縮光圈）
+  if (deathAnimStage >= 2) {
+    let screenX = (deathAnimX - cameraX) * z;
+    let screenY = (deathAnimY + mapOffsetY) * z;
+    let baseHoleR = max(56, ((powerLevel >= 2 ? 80 : 53) * 0.85) * z);
+    let maxScreenR = dist(screenX, screenY, width / 2, height / 2) + Math.hypot(width, height) * 0.5;
+    let holeR = baseHoleR;
+
+    if (deathAnimStage === 3) {
+      // 前 110ms 由全螢幕快速收攏到聚光燈圓洞，消除瞬間黑屏硬切閃爍
+      let introT = constrain((elapsed - STAGE1_MS) / 110, 0, 1);
+      let easeOut = 1 - pow(1 - introT, 3);
+      holeR = lerp(maxScreenR, baseHoleR, easeOut);
+    } else if (deathAnimStage === 4) {
+      let t4 = constrain((elapsed - STAGE1_MS - STAGE3_MS) / STAGE4_MS, 0, 1);
+      holeR = lerp(baseHoleR, baseHoleR * 1.2, t4);
+    } else if (deathAnimStage === 5) {
+      let t5 = constrain((elapsed - STAGE1_MS - STAGE3_MS - STAGE4_MS) / STAGE5_MS, 0, 1);
+      holeR = lerp(baseHoleR * 1.2, 0, t5);
+    }
+
+    push();
+    resetMatrix();
+    let ctx = drawingContext;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    if (holeR > 0.5) {
+      ctx.arc(screenX, screenY, holeR, 0, TWO_PI, true);
+    }
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fill("evenodd");
+    ctx.restore();
+    pop();
+  }
+}
 
 function draw() { 
   if (controlMode === "MOBILE") {
@@ -63,6 +198,11 @@ function draw() {
 
   if (gameState === "GAME_OVER") {
     drawGameOver();
+    return;
+  }
+
+  if (gameState === "DYING_ANIMATION") {
+    drawDeathAnimation();
     return;
   }
 
@@ -215,6 +355,7 @@ function draw() {
     updateMovingPlatforms();
     updateBumpingTiles();
     updateEnemies(currentHitboxW, currentHitboxH, viewWorldW);
+    if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return; }
     if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO" || gameState === "ITEM_GUIDE") return;
     updatePlayerFireballs();
     updateCactusNeedles();
@@ -227,8 +368,10 @@ function draw() {
 
     if (currentLevel === 4) {
       updateFireBars(currentHitboxW, currentHitboxH);
+      if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return; }
       if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO") return;
       updateBossAndFireballs(currentHitboxW, currentHitboxH, viewWorldW);
+      if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return; }
       if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO") return;
       updateBridgeCollapse();
     }
@@ -461,7 +604,7 @@ function draw() {
     hideCharacter = true;
   }
   if (millis() - stateTimer > 1100) {
-    // ...（原本切換到 MAP_1_2 的程式碼保持不變）
+    // 切換到 MAP_1_2
     is1_2Intro = false;
     loadLevelMap(MAP_1_2);
     spawnLevelEnemies(2);
@@ -695,7 +838,7 @@ if (isExitingPipe) {
         isShortJump = false; 
         featherFlapsLeft = 2;
 
-        // <--- 新增這 4 行：每 10 幀紀錄一次地面安全座標供時光回溯使用
+        // 每 10 幀紀錄一次地面安全座標供時光回溯使用
         if (gameState === "PLAYING" && frameCount % 10 === 0) {
           safePositionHistory.push({ x: characterX, y: characterY });
           if (safePositionHistory.length > 12) safePositionHistory.shift();
@@ -1083,7 +1226,7 @@ if (isExitingPipe) {
   }
   pop();
 }
-  drawWorld2AtmosphereAndLandmarks(); // <--- 新增這 1 行（畫在所有磚塊與角色後方）
+  drawWorld2AtmosphereAndLandmarks(); // 畫在所有磚塊與角色後方
   drawMap(viewWorldW);
   drawMovingPlatforms();
   drawEnemies();
@@ -1194,7 +1337,7 @@ if (isExitingPipe) {
       }
       image(activeSpriteSheet, 0, 0, frameWidth, frameHeight, currentFrame * frameWidth, 0, frameWidth, frameHeight); 
       noTint();
-      colorMode(RGB, 255); // <--- 補上這行，還原預設 RGB 模式！
+      colorMode(RGB, 255); // 還原預設 RGB 模式
       pop(); 
     }
 
@@ -1231,7 +1374,7 @@ if (isExitingPipe) {
 
   updateAndDrawFloatingTexts();
 
-  // <--- 新增：2-4 黑暗礦坑頭燈裝備架、火把與黑暗視野遮罩
+  // 2-4 黑暗礦坑頭燈裝備架、火把與黑暗視野遮罩
   if (currentWorld === 2 && currentLevel === 4) {
     drawMinerLampAndTorches(viewWorldW, viewWorldH);
   }
