@@ -14,7 +14,7 @@ AI 之間無法直接對話，這份文件是「誰改了什麼、誰正在改�
 ## 交接紀錄（最新的放最上面）
 
 ### 2026-11-23 --- Gemini --- 修復 BUG-005 與更新創作者模式預設關卡至 2-4
--   基準：2.11，commit `aca09a7`
+-   基準：2.11，commit `aca09a7` 上傳後`a8226b9`
 -   改動檔案與函式：`ui_hud.js`（`drawNSMBHUD`）、`input.js`（`activateCreatorDebugMode`）
 -   行為變更：
     1. 修正電腦版 HUD 左下角關卡標籤由 `1-${currentLevel}` 改為 `${currentWorld}-${currentLevel}`。
