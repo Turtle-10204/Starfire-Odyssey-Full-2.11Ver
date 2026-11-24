@@ -4,6 +4,8 @@
 
 // 退出關卡回大地圖時還原進關前道具快照（避免重複刷道具）
 function exitToWorldMapRestoreEntry() {
+  if (typeof resetWallJumpState === "function") resetWallJumpState();
+  if (typeof resetPipeTransitionState === "function") resetPipeTransitionState();
   lives = levelEntrySnapshot.lives;
   powerLevel = levelEntrySnapshot.powerLevel;
   powerType = levelEntrySnapshot.powerType;
@@ -25,6 +27,8 @@ function exitToWorldMapRestoreEntry() {
 }
 
 function startLevel(levelNum, resetRunStats, keepPowerup = false) {
+  if (typeof resetWallJumpState === "function") resetWallJumpState();
+  if (typeof resetPipeTransitionState === "function") resetPipeTransitionState();
   deathAnimTimer = 0;
   deathAnimStage = 0;
   deathAnimFinished = false;
