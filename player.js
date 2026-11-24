@@ -223,8 +223,8 @@ function triggerChronoShockwave() {
   playSFX("powerup");
   for (let en of enemies) {
     if (!en.dead && dist(en.x, en.y, characterX, characterY) < 260) {
-      en.stunTimer = 2500; // 領域內敵人定格暈眩 2.5 秒，可直接撞飛！
-      en.vx = 0;
+      en.stunTimer = 2500; // 領域內敵人標記震波狀態 2.5 秒（保留原本移動方向，在時間領域內可直接踹飛）
+      en.isChronoStun = true;
     }
   }
 }
