@@ -191,19 +191,25 @@ if (currentWorld === 2 && currentLevel === 4) {
     let powerShort = "NORMAL";
     if (powerLevel === 2) powerShort = "SUPER";
     if (powerLevel === 3) {
-      let pNames = { fire: "FIRE FLOWER", feather: "FEATHER CAPE", speed: "SPEED BOOST [Ctrl]" };
+      let pNames = {
+        fire: "FIRE FLOWER",
+        feather: "FEATHER CAPE",
+        speed: "SPEED BOOST [Ctrl]",
+        cactus: "CACTUS ARMOR [↓]",
+        chrono: "CHRONO FIELD [Ctrl]"
+      };
       powerShort = pNames[powerType] || "SUPER";
     }
     if (starTimer > 0) powerShort += ` ★${(starTimer / 1000).toFixed(1)}s`;
 
     noStroke();
     fill(0, 0, 0, 120);
-    rect(18, height - 38, 520, 26, 13);
+    rect(18, height - 38, 680, 26, 13);
     fill(255, 255, 255, 220);
     textStyle(NORMAL);
     textSize(13);
     textAlign(LEFT, CENTER);
-    text(`WORLD ${stageLabel}  |  ${powerShort}  |  [M] 大地圖  [O] 設定`, 30, height - 25);
+    text(`WORLD ${stageLabel}  |  ${powerShort}  |  Ctrl：切換衝刺 / 時光領域  |  [M] 大地圖  [O] 設定`, 30, height - 25);
   }
 
   pop();
