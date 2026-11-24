@@ -59,11 +59,18 @@ function updateBossAndFireballs(playerW, playerH, viewWorldW = width) {
     bf.y += (bf.targetY - bf.y) * 0.04;
 
     if (gameState === "PLAYING" && invincibleTimer <= 0 && starTimer <= 0 &&
-        abs(characterX - bf.x) < (playerW / 2 + 12) && abs(characterY - bf.y) < (playerH / 2 + 8)) {
-      bossFireballs.splice(i, 1);
-      takeDamage();
-      return;
-    }
+         abs(characterX - bf.x) < (playerW / 2 + 12) && abs(characterY - bf.y) < (playerH / 2 + 8)) {
+       bossFireballs.splice(i, 1);
+       if (powerLevel === 3 && powerType === "cactus" && isCrouching) {
+         invincibleTimer = 1000;
+         knockbackVX = (bf.vx < 0 ? -1 : 1) * 7.5;
+         playSFX("stomp");
+         floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
+         continue;
+       }
+       takeDamage();
+       return;
+     }
 
     if (bf.x < cameraX - 100 || bf.x > cameraX + viewWorldW + 200) {
       bossFireballs.splice(i, 1);
@@ -120,10 +127,17 @@ function updateBossAndFireballs(playerW, playerH, viewWorldW = width) {
     }
 
     if (invincibleTimer <= 0 && starTimer <= 0 &&
-        abs(characterX - boss.x) < (playerW + boss.w) / 2 - 6 &&
-        abs(characterY - boss.y) < (playerH + boss.h) / 2 - 6) {
-      takeDamage();
-    }
+         abs(characterX - boss.x) < (playerW + boss.w) / 2 - 6 &&
+         abs(characterY - boss.y) < (playerH + boss.h) / 2 - 6) {
+       if (powerLevel === 3 && powerType === "cactus" && isCrouching) {
+         invincibleTimer = 1000;
+         knockbackVX = (characterX < boss.x ? -1 : 1) * 9.5;
+         playSFX("stomp");
+         floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
+       } else {
+         takeDamage();
+       }
+     }
   }
 }
 
