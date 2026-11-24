@@ -134,11 +134,15 @@ let deathAnimX = 100;
 
 let deathAnimY = 100;
 
+let deathAnimCameraX = 0;
+
 let deathAnimTimer = 0;
 
 let deathAnimStage = 0;
 
 let deathAnimFinished = false;
+
+let deathIsPitFall = false;
 
 // 加速菇衝刺蓄力系統與撞擊反彈
 let currentSprintBonus = 0;
