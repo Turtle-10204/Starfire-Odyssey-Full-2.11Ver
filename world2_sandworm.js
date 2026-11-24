@@ -123,7 +123,7 @@ function updateSandwormBoss(playerW, playerH) {
       b.nextAttack = random(pool);
       b.lastAttack = b.nextAttack;
       b.state = "TELEGRAPH";
-      b.timer = 50;
+      b.timer = 75;
       playSFX("stomp");
     }
   } else if (b.state === "TELEGRAPH") {
@@ -169,6 +169,7 @@ function updateSandwormBoss(playerW, playerH) {
         b.headY = 8.5 * TILE_SIZE;
         b.beamMaxTimer = 180; // 3 秒（60fps * 3）
         b.timer = 180;
+        b.beamHasHit = false;
       }
     }
   } else if (b.state === "ROCKFALL") {
@@ -230,34 +231,54 @@ function updateSandwormBoss(playerW, playerH) {
       b.timer = 95;
     }
   } else if (b.state === "HYPER_BEAM") {
-      // 固定在中左/中右穩定蓄力與擴展，不再亂角度插自己腳
-      b.headY = lerp(b.headY, 8.5 * TILE_SIZE, 0.15);
-      let elapsed = (b.beamMaxTimer || 180) - b.timer; // 0 -> 180
-      // 前 30 幀：小小一條預警光線；30 幀後：一路擴大成覆蓋全場的光（持續到 180 幀結束）
-      let expandProg = constrain((elapsed - 30) / 75, 0, 1);
-      let beamHalfH = lerp(6, 260, expandProg);
+    // 固定在中左/中右穩定蓄力與擴展，不再亂角度插自己腳
+    b.headY = lerp(b.headY, 8.5 * TILE_SIZE, 0.15);
+    let elapsed = (b.beamMaxTimer || 180) - b.timer; // 0 -> 180
+    // 前 30 幀：小小一條預警光線；30 幀後：一路擴大成覆蓋全場的光（持續到 180 幀結束）
+    let expandProg = constrain((elapsed - 30) / 75, 0, 1);
+    let beamHalfH = lerp(6, 260, expandProg);
 
-      if (expandProg > 0.08 && gameState === "PLAYING" && invincibleTimer <= 0 && starTimer <= 0) {
-        let inBeamX = (b.dir === 1)
-          ? (characterX >= b.headX - 10 && characterX <= b.arenaRight + 40)
-          : (characterX <= b.headX + 10 && characterX >= b.arenaLeft - 40);
-        let inBeamY = abs(characterY - b.headY) < beamHalfH;
-        // 只有蹲下（isCrouching）才能躲過全場擴展光束
-        if (inBeamX && inBeamY && !isCrouching) {
-          takeDamage();
-          return;
+    if (expandProg > 0.08 && gameState === "PLAYING" && invincibleTimer <= 0 && starTimer <= 0) {
+      let inBeamX = (b.dir === 1)
+        ? (characterX >= b.headX - 10 && characterX <= b.arenaRight + 40)
+        : (characterX <= b.headX + 10 && characterX >= b.arenaLeft - 40);
+      let inBeamY = abs(characterY - b.headY) < beamHalfH;
+
+      // 牆壁遮擋射線掃描（處理地圖邊界並排除裝飾性非實體方塊）
+      let isBlocked = false;
+      if (inBeamX && typeof levelMap !== "undefined" && levelMap.length > 0 && levelMap[0].length > 0) {
+        let scanR = floor(b.headY / TILE_SIZE);
+        if (scanR >= 0 && scanR < levelMap.length) {
+          let stepDir = (characterX >= b.headX) ? 1 : -1;
+          let distToPlayer = abs(characterX - b.headX);
+          for (let d = TILE_SIZE * 0.5; d < distToPlayer; d += TILE_SIZE * 0.5) {
+            let scanC = floor((b.headX + stepDir * d) / TILE_SIZE);
+            if (scanC < 0 || scanC >= levelMap[0].length) break;
+            let tile = levelMap[scanR][scanC];
+            if (tile !== ' ' && tile !== 'I' && tile !== 'A' && tile !== 'L' && tile !== 'F' && tile !== '|' && tile !== 'C' && tile !== 'O' && tile !== '=') {
+              isBlocked = true;
+              break;
+            }
+          }
         }
       }
-      if (b.timer <= 0) {
-        b.state = "WEAK_EXPOSE";
-        b.timer = 95;
+
+      // 只有蹲下（isCrouching）才能躲過全場擴展光束，且每次光束最多命中一次
+      if (!isBlocked && inBeamX && inBeamY && !isCrouching && !b.beamHasHit) {
+        b.beamHasHit = true;
+        takeDamage();
       }
+    }
+    if (b.timer <= 0) {
+      b.state = "WEAK_EXPOSE";
+      b.timer = 95;
+    }
   } else if (b.state === "WEAK_EXPOSE") {
     // 只有大招結束後的 1.5 秒喘息期，巨蟲才會趴低把發光尾核露在地面高度給玩家踩！
     b.headY = lerp(b.headY, floorY, 0.14);
     if (b.timer <= 0) {
       b.state = "IDLE";
-      b.timer = 45;
+      b.timer = 90;
     }
   } else if (b.state === "COUNTER_SHOCK") {
     // 【被踩中後的震波反制狀態】：原地猛烈甩尾把玩家震走，隨後立刻恢復警戒
@@ -279,38 +300,38 @@ function updateSandwormBoss(playerW, playerH) {
   b.segments[0].y = b.headY;
 
   let isTailVulnerable = (b.state === "WEAK_EXPOSE");
-    let waveAmp = (b.state === "TRAIN_CHARGE") ? 14 : ((b.state === "COUNTER_SHOCK") ? 18 : 9);
-    let waveSpeed = (b.state === "TRAIN_CHARGE") ? 0.28 : 0.16;
+  let waveAmp = (b.state === "TRAIN_CHARGE") ? 14 : ((b.state === "COUNTER_SHOCK") ? 18 : 9);
+  let waveSpeed = (b.state === "TRAIN_CHARGE") ? 0.28 : 0.16;
 
-    for (let i = 1; i < b.segments.length; i++) {
-      let prev = b.segments[i - 1];
-      let cur = b.segments[i];
-      let dx = prev.x - cur.x;
-      let dy = prev.y - cur.y;
-      let d = max(0.001, sqrt(dx * dx + dy * dy));
-      let nx = dx / d;
-      let ny = dy / d;
-      // 垂直於連線方向的法向量，用來做蛇形軟Q扭動
-      let perpX = -ny;
-      let perpY = nx;
-      let flexRatio = map(i, 1, b.segments.length - 1, 0.55, 1.35);
-      let wave = sin(frameCount * waveSpeed - i * 0.55) * waveAmp * flexRatio;
+  for (let i = 1; i < b.segments.length; i++) {
+    let prev = b.segments[i - 1];
+    let cur = b.segments[i];
+    let dx = prev.x - cur.x;
+    let dy = prev.y - cur.y;
+    let d = max(0.001, sqrt(dx * dx + dy * dy));
+    let nx = dx / d;
+    let ny = dy / d;
+    // 垂直於連線方向的法向量，用來做蛇形軟Q扭動
+    let perpX = -ny;
+    let perpY = nx;
+    let flexRatio = map(i, 1, b.segments.length - 1, 0.55, 1.35);
+    let wave = sin(frameCount * waveSpeed - i * 0.55) * waveAmp * flexRatio;
 
-      let spacing = 31;
-      let targetX = prev.x - nx * spacing + perpX * wave;
-      let targetY = prev.y - ny * spacing + perpY * wave;
+    let spacing = 31;
+    let targetX = prev.x - nx * spacing + perpX * wave;
+    let targetY = prev.y - ny * spacing + perpY * wave;
 
-      // 非喘息期時，尾巴往上翹起（用柔和的目標高度，不把後面幾節卡死）
-      if (!isTailVulnerable && b.state !== "BURROW_AMBUSH" && i >= 10) {
-        let lift = (i - 9) * 10;
-        targetY -= lift;
-      }
-
-      // 軟Q彈性追隨（越往後越有甩鞭感）
-      let spring = map(i, 1, b.segments.length - 1, 0.42, 0.28);
-      cur.x = lerp(cur.x, targetX, spring);
-      cur.y = lerp(cur.y, targetY, spring);
+    // 非喘息期時，尾巴往上翹起（用柔和的目標高度，不把後面幾節卡死）
+    if (!isTailVulnerable && b.state !== "BURROW_AMBUSH" && i >= 10) {
+      let lift = (i - 9) * 10;
+      targetY -= lift;
     }
+
+    // 軟Q彈性追隨（越往後越有甩鞭感）
+    let spring = map(i, 1, b.segments.length - 1, 0.42, 0.28);
+    cur.x = lerp(cur.x, targetX, spring);
+    cur.y = lerp(cur.y, targetY, spring);
+  }
 
   // 鑽潛階段時整條蟲身沉入沙底
   if (b.state === "BURROW_AMBUSH" && b.subPhase === "DIVE") {
@@ -392,16 +413,16 @@ function updateSandwormBoss(playerW, playerH) {
       let seg = b.segments[i];
       if (seg.y > 13.5 * TILE_SIZE) continue;
       if (dist(characterX, characterY, seg.x, seg.y) < (playerW / 2 + 30)) {
-         if (starTimer > 0) {
-           damageSandworm(5, seg.x, seg.y, true);
-           return;
-         } else if (powerLevel === 3 && powerType === "cactus" && isCrouching && invincibleTimer <= 0) {
-           invincibleTimer = 1000;
-           knockbackVX = (characterX < seg.x ? -1 : 1) * 10.5;
-           playSFX("stomp");
-           floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
-           continue;
-         } else if (powerType === "speed" && currentSprintBonus >= 0.85) {
+        if (starTimer > 0) {
+          damageSandworm(5, seg.x, seg.y, true);
+          return;
+        } else if (powerLevel === 3 && powerType === "cactus" && isCrouching && invincibleTimer <= 0) {
+          invincibleTimer = 1000;
+          knockbackVX = (characterX < seg.x ? -1 : 1) * 10.5;
+          playSFX("stomp");
+          floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
+          continue;
+        } else if (powerType === "speed" && currentSprintBonus >= 0.85) {
           let pushDir = (characterX < seg.x) ? -1 : 1;
           knockbackVX = pushDir * 10.5;
           velocityY = -7;
@@ -457,6 +478,27 @@ function drawSandwormBoss() {
     ellipse(b.ambushX + rumble, 13 * TILE_SIZE, 95, 26);
     fill("#FF5400");
     triangle(b.ambushX - 14, 12.2 * TILE_SIZE, b.ambushX + 14, 12.2 * TILE_SIZE, b.ambushX, 11.4 * TILE_SIZE);
+  }
+
+  // 3.5 招式 4：飛撲落地與沙浪震波紅線預警（世界座標空間對齊落點）
+  if (b.active && b.state === "ARC_LEAP" && b.arcProgress > 0.5 && b.arcProgress < 0.95) {
+    let groundY = 13 * TILE_SIZE;
+    let pulseAlpha = 140 + sin(frameCount * 0.45) * 70;
+    push();
+    // 落點垂直警示紅線
+    stroke(255, 59, 48, pulseAlpha);
+    strokeWeight(3);
+    line(b.arcEndX, 3 * TILE_SIZE, b.arcEndX, groundY);
+    // 地面落點紅圈與左右沙浪擴散方向預警箭頭
+    noStroke();
+    fill(255, 59, 48, pulseAlpha);
+    ellipse(b.arcEndX, groundY - 2, 54, 14);
+    triangle(b.arcEndX - 10, groundY - 24, b.arcEndX + 10, groundY - 24, b.arcEndX, groundY - 8);
+    // 左側沙浪擴散預警
+    triangle(b.arcEndX - 38, groundY - 14, b.arcEndX - 38, groundY - 2, b.arcEndX - 54, groundY - 8);
+    // 右側沙浪擴散預警
+    triangle(b.arcEndX + 38, groundY - 14, b.arcEndX + 38, groundY - 2, b.arcEndX + 54, groundY - 8);
+    pop();
   }
 
   // 4. 招式 4：落地沙浪衝擊波
@@ -549,14 +591,30 @@ function drawSandwormBoss() {
     pop();
   }
 
-  // 招式 5：中左/中右全場擴展光束（持續 3 秒，蹲下躲避）
+  // 招式 5：中左/中右全場擴展光束（持續 3 秒，蹲下躲避，遇實體牆壁截斷）
   if (b.state === "HYPER_BEAM") {
     let elapsed = (b.beamMaxTimer || 180) - b.timer;
     let expandProg = constrain((elapsed - 30) / 75, 0, 1);
     let beamHalfH = lerp(6, 260, expandProg);
-    let beamLen = (b.dir === 1)
+    let maxBeamLen = (b.dir === 1)
       ? max(120, (b.arenaRight - b.headX) + 40)
       : max(120, (b.headX - b.arenaLeft) + 40);
+    let beamLen = maxBeamLen;
+
+    if (typeof levelMap !== "undefined" && levelMap.length > 0 && levelMap[0].length > 0) {
+      let scanR = floor(b.headY / TILE_SIZE);
+      if (scanR >= 0 && scanR < levelMap.length) {
+        for (let d = TILE_SIZE * 0.5; d < maxBeamLen; d += TILE_SIZE * 0.5) {
+          let scanC = floor((b.headX + b.dir * d) / TILE_SIZE);
+          if (scanC < 0 || scanC >= levelMap[0].length) break;
+          let tile = levelMap[scanR][scanC];
+          if (tile !== ' ' && tile !== 'I' && tile !== 'A' && tile !== 'L' && tile !== 'F' && tile !== '|' && tile !== 'C' && tile !== 'O' && tile !== '=') {
+            beamLen = d;
+            break;
+          }
+        }
+      }
+    }
 
     push();
     translate(b.headX, b.headY);
@@ -580,20 +638,21 @@ function drawSandwormBoss() {
     pop();
   }
 
-  // 底部 BOSS 血條
+  // BOSS 血條（依裝置控制模式動態調整寬度與位置）
   if (b.active) {
     push();
     resetMatrix();
-    let barW = min(440, width * 0.65);
+    let isMobileUI = (typeof controlMode !== "undefined" && controlMode === "MOBILE");
+    let barW = isMobileUI ? min(320, width * 0.55) : min(440, width * 0.65);
     let bx = width / 2 - barW / 2;
-    let by = height - 42;
+    let by = isMobileUI ? 76 : (height - 42);
     fill(0, 0, 0, 200);
     stroke("#FFD166");
     strokeWeight(2.5);
     rect(bx - 6, by - 22, barW + 12, 34, 10);
     noStroke();
     fill("#FFD166");
-    textSize(13);
+    textSize(isMobileUI ? 12 : 13);
     textAlign(CENTER, TOP);
     text("SANDWORM GUARDIAN（沙暴巨蟲）", width / 2, by - 19);
     fill("#333");
