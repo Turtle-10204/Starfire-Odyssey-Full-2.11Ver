@@ -68,17 +68,44 @@ function drawMovingPlatforms() {
 }
 
 function checkEnterPipe(cx, cy, cw, ch) {
-  let rightEdge = cx + cw / 2 + 4;
+  if (!isOnGround) return;
+  let rightEdge = cx + cw / 2 + 6;
   let col = floor(rightEdge / TILE_SIZE);
-  let row = floor(cy / TILE_SIZE);
+  let startRow = floor((cy - ch / 2 + 4) / TILE_SIZE);
+  let endRow = floor((cy + ch / 2 - 4) / TILE_SIZE);
 
-  if (row >= 0 && row < levelMap.length && col >= 0 && col < levelMap[0].length) {
-    if (levelMap[row][col] === 'H') {
+  if (col < 0 || col >= levelMap[0].length) return;
+  for (let row = startRow; row <= endRow; row++) {
+    if (row >= 0 && row < levelMap.length && levelMap[row][col] === 'H') {
+      // 找出橫管最左側管口欄位與最右側深度欄位
+      let mouthCol = col;
+      while (mouthCol > 0 && levelMap[row][mouthCol - 1] === 'H') {
+        mouthCol--;
+      }
+      let endCol = col;
+      while (endCol + 1 < levelMap[row].length && levelMap[row][endCol + 1] === 'H') {
+        endCol++;
+      }
+      // 找出橫管最底排，讓主角雙腳精準對齊橫管通道中心地板
+      let bottomPipeRow = row;
+      while (bottomPipeRow + 1 < levelMap.length && levelMap[bottomPipeRow + 1][mouthCol] === 'H') {
+        bottomPipeRow++;
+      }
+
+      pipeMouthX = mouthCol * TILE_SIZE;
+      pipeTargetX = ((mouthCol + endCol + 1) / 2) * TILE_SIZE + cw / 2;
+      pipeTargetY = (bottomPipeRow + 1) * TILE_SIZE - ch / 2 - 0.5;
+      pipeClipDir = "LEFT_OF_X";
+      pipeAlignActive = true;
+
       gameState = "ENTERING_PIPE";
       stateTimer = millis();
       isAttacking = false;
       isCrouching = false;
+      isGliding = false;
+      if (typeof resetWallJumpState === "function") resetWallJumpState();
       playSFX("shrink");
+      return;
     }
   }
 }
