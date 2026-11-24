@@ -48,6 +48,7 @@ function spawnLevelEnemies(lvl) {
       dead: false,
       flyPhase: random(TWO_PI),
       stunTimer: 0,
+      isChronoStun: false,
       knockbackX: 0
     };
   };
@@ -100,9 +101,17 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
     let isStunned = false;
     if (en.stunTimer && en.stunTimer > 0) {
       en.stunTimer -= deltaTime;
-      if (en.stunTimer < 0) en.stunTimer = 0;
+      if (en.stunTimer <= 0) {
+        en.stunTimer = 0;
+        en.isChronoStun = false;
+      }
       isStunned = (en.stunTimer > 0);
+    } else {
+      en.isChronoStun = false;
     }
+
+    // 所有暈眩狀態（含時間震波）均停在原地，且空中敵人會受重力掉落地面
+    let isMovementLocked = isStunned;
 
     if (en.knockbackX && abs(en.knockbackX) > 0.1) {
       en.x += en.knockbackX;
@@ -117,7 +126,7 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
     }
 
     if (en.type === "parakoopa") {
-      if (!isStunned) {
+      if (!isMovementLocked) {
         en.x += en.vx * 0.8 * timeScale;
         if (checkCollision(en.x, en.y, en.w, en.h)) {
           en.x -= en.vx * 0.8 * timeScale;
@@ -125,7 +134,7 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
         }
 
         if (!en.flyDir) en.flyDir = -1;
-        let nextY = en.y + en.flyDir * 1.6;
+        let nextY = en.y + en.flyDir * 1.6 * timeScale;
         if (abs(nextY - en.baseY) > 48 || checkCollision(en.x, nextY, en.w, en.h)) {
           en.flyDir *= -1;
         } else {
@@ -145,7 +154,7 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
         }
       }
     } else {
-      if (!isStunned) {
+      if (!isMovementLocked) {
         en.x += en.vx * timeScale;
         if (checkCollision(en.x, en.y - 2, en.w, en.h - 4)) {
           en.x -= en.vx * timeScale;
@@ -213,12 +222,12 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
         }
       }
 
-      if (starTimer > 0 || inChrono) {
+      if (starTimer > 0) {
         en.dead = true;
         en.vy = -8;
-        score += (starTimer > 0 ? 300 : 250);
+        score += 300;
         playSFX("kick");
-        floatingTexts.push({ text: starTimer > 0 ? "+300" : "CHRONO! +250", x: en.x, y: en.y - 20, vy: -1.5, life: 45 });
+        floatingTexts.push({ text: "+300", x: en.x, y: en.y - 20, vy: -1.5, life: 45 });
         continue;
       }
 
@@ -227,7 +236,7 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
                     (playerBottom <= en.y + 6 && characterY < en.y);
 
       if (isStomp) {
-        // 已取消踩怪後人物閃爍（不再設 invincibleTimer = 250）
+        // 已取消踩怪後人物閃爍（不再設 invincibleTimer = 250），時間領域內亦保持正常踩踏
         velocityY = -14;
         isOnGround = false;
         isGliding = false;
@@ -266,6 +275,32 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
             playSFX("stomp");
           }
         }
+      } else if (inChrono && en.isChronoStun && en.stunTimer > 0) {
+        // 開啟時間領域＋時間震波狀態內：正面/側面碰觸可直接踹飛秒殺
+        en.dead = true;
+        en.vy = -8;
+        en.isChronoStun = false;
+        score += 250;
+        playSFX("kick");
+        floatingTexts.push({ text: "CHRONO! +250", x: en.x, y: en.y - 20, vy: -1.5, life: 45 });
+        continue;
+      } else if (!inChrono && en.isChronoStun && en.stunTimer > 0) {
+        // 關閉時間領域後：改為非致命「擊飛」，並朝被撞方向繼續前進
+        let pushDir = (en.x >= characterX) ? 1 : -1;
+        en.isChronoStun = false;
+        en.stunTimer = 0;
+        en.knockbackX = pushDir * 10.5;
+        en.vy = -5.0;
+        if (en.vx !== 0) {
+          en.vx = abs(en.vx) * pushDir;
+        } else {
+          en.vx = 1.4 * pushDir;
+        }
+        knockbackVX = -pushDir * 6.5;
+        invincibleTimer = max(invincibleTimer, 250);
+        playSFX("kick");
+        floatingTexts.push({ text: "KNOCKBACK!", x: en.x - 32, y: en.y - 25, vy: -1.4, life: 45 });
+        continue;
       } else if (en.type === "shell" && !en.shellMoving) {
         let isSpeedBoost = (powerType === "speed" && currentSprintBonus > 0.2);
         en.shellMoving = true;
@@ -302,8 +337,8 @@ function updateEnemies(playerW, playerH, viewWorldW = width) {
         score += 150;
         playSFX("kick");
         floatingTexts.push({ text: "STUN! +150", x: en.x - 24, y: en.y - 28, vy: -1.4, life: 50 });
-      } else if (isStunned) {
-        // 怪物暈眩期間碰撞完全不會受傷
+      } else if (isMovementLocked) {
+        // 一般暈眩期間碰撞完全不會受傷
         continue;
       } else {
         takeDamage();
