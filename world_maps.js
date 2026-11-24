@@ -411,10 +411,10 @@ function buildWorld2Level(lvlNum) {
     setTile(9, arenaStart - 4, 'M');
 
     fillRect(1, arenaStart, 12, cols - 1, ' ');
-    fillRect(9, arenaStart + 4, 9, arenaStart + 9, 'S');
-    fillRect(6, arenaStart + 11, 6, arenaStart + 15, 'S');
-    fillRect(9, cols - 19, 9, cols - 14, 'S');
-    fillRect(6, cols - 25, 6, cols - 21, 'S');
+    fillRect(9, arenaStart + 4, 9, arenaStart + 9, '=');
+    fillRect(6, arenaStart + 11, 6, arenaStart + 15, '=');
+    fillRect(9, cols - 19, 9, cols - 14, '=');
+    fillRect(6, cols - 25, 6, cols - 21, '=');
 
     fillRect(1, cols - 3, 12, cols - 1, 'G');
     fillRect(9, cols - 4, 12, cols - 2, 'C');
