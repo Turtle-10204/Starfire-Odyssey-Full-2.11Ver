@@ -761,25 +761,6 @@ if (isExitingPipe) {
   }
 }
 // --- 2. 物理系統與碰撞偵測 ---
-  if (isExitingPipe) {
-    moveX = 0;
-    velocityY = 0;
-    characterY -= 1.2; // 慢慢從水管裡往上升上來
-    let pipeCol = floor(characterX / TILE_SIZE);
-    let pipeTopRow = 11;
-    for (let r = 0; r < levelMap.length; r++) {
-      if (levelMap[r][pipeCol] === 'P') {
-        pipeTopRow = r;
-        break;
-      }
-    }
-    let targetStandY = pipeTopRow * TILE_SIZE - currentHitboxH / 2 - 0.5;
-    if (characterY <= targetStandY) {
-      characterY = targetStandY;
-      isExitingPipe = false;
-    }
-  }
-
   if (isExitingCeilingPipe) {
     moveX = 0;
     velocityY = 0;
