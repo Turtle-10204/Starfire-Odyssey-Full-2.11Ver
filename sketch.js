@@ -132,6 +132,9 @@ function setup() {
       e.preventDefault();
     }
   }, { passive: false });
+    if (typeof loadMobileControlsConfig === "function") {
+    loadMobileControlsConfig();
+  }
 } 
 
 function drawDeathAnimation() {
@@ -1076,6 +1079,9 @@ function draw() {
   if (gameState === "WORLD_MAP") {
     drawWorldMap();
     if (showSettingsModal) drawSettingsModal();
+    if (isEditingMobileControls && typeof drawMobileControlsEditor === "function") {
+      drawMobileControlsEditor();
+    }
     return;
   }
 
@@ -1118,8 +1124,8 @@ function draw() {
   let viewWorldW = width / z;
   let viewWorldH = height / z;
 
-  // 關卡倒數計時器（開啟設定或道具圖鑑時暫停倒數）
-  if (gameState === "PLAYING" && !showSettingsModal && !showExitMapConfirmModal) {
+  // 關卡倒數計時器（開啟設定、道具圖鑑或編輯按鍵時暫停倒數）
+  if (gameState === "PLAYING" && !showSettingsModal && !showExitMapConfirmModal && !isEditingMobileControls) {
     if (millis() - lastLevelTimerTick >= 1000) {
       lastLevelTimerTick = millis();
       levelTimer--;
@@ -1131,7 +1137,7 @@ function draw() {
     }
   }
 
-  if (gameState !== "ITEM_GUIDE" && !showSettingsModal && !showExitMapConfirmModal) {
+  if (gameState !== "ITEM_GUIDE" && !showSettingsModal && !showExitMapConfirmModal && !isEditingMobileControls) {
     if (invincibleTimer > 0) {
       invincibleTimer -= deltaTime;
       if (invincibleTimer < 0) invincibleTimer = 0;
@@ -1208,9 +1214,20 @@ function draw() {
     return;
   }
 
-  let physRes = updatePlayerPhysicsAndInput(viewWorldW);
-  if (physRes.aborted) return;
-  let { moveX, isBig, currentHitboxW, currentHitboxH } = physRes;
+  
+
+  let moveX = 0, isBig = (powerLevel >= 2);
+  let currentHitboxW = isBig ? BIG_HITBOX_W : BASE_HITBOX_W;
+  let currentHitboxH = prevHitboxH || (isBig ? BIG_HITBOX_H : BASE_HITBOX_H);
+
+  if (!isEditingMobileControls) {
+    let physRes = updatePlayerPhysicsAndInput(viewWorldW);
+    if (physRes.aborted) return;
+    moveX = physRes.moveX;
+    isBig = physRes.isBig;
+    currentHitboxW = physRes.currentHitboxW;
+    currentHitboxH = physRes.currentHitboxH;
+  }
 
   // --- 3. 判斷動畫狀態 ---
   const isJumping = !isOnGround; 
@@ -1708,7 +1725,9 @@ if (pipeFadeAlpha > 0) {
 
   drawNSMBHUD();
 
-  if (controlMode === "MOBILE" && gameState === "PLAYING" && !showSettingsModal) {
+  if (isEditingMobileControls && typeof drawMobileControlsEditor === "function") {
+    drawMobileControlsEditor();
+  } else if (controlMode === "MOBILE" && gameState === "PLAYING" && !showSettingsModal) {
     drawMobileControls();
   }
 
