@@ -46,16 +46,23 @@ function takeDamage() {
   }
 }
 
-function handlePlayerDeath() {
+function handlePlayerDeath(isPitFall = false) {
   if (tryChronoTimeRewind()) return; // 掉進深淵/岩漿也能回溯保命
   if (gameState === "DYING_ANIMATION") return; // 防重複觸發
   playSFX("death");
   deathAnimX = characterX;
-  let maxVisibleY = max(TILE_SIZE * 2, (levelMap.length - 1.5) * TILE_SIZE);
-  deathAnimY = constrain(characterY, TILE_SIZE * 2, maxVisibleY);
+  deathAnimCameraX = cameraX;
+  deathIsPitFall = isPitFall;
+  if (isPitFall) {
+    // 深淵墜落是在畫面外死亡，聚光燈圓心對準落坑處的畫面最底緣，不把角色拉回坑口
+    deathAnimY = levelMap.length * TILE_SIZE - TILE_SIZE * 0.35;
+  } else {
+    let maxVisibleY = max(TILE_SIZE * 2, (levelMap.length - 1.2) * TILE_SIZE);
+    deathAnimY = constrain(characterY, TILE_SIZE * 2, maxVisibleY);
+  }
   gameState = "DYING_ANIMATION";
   deathAnimTimer = millis();
-  deathAnimStage = 1;
+  deathAnimStage = isPitFall ? 3 : 1;
   deathAnimFinished = false;
   isAttacking = false;
   isCrouching = false;
@@ -67,6 +74,7 @@ function finishDeathAnimation() {
   deathAnimFinished = true;
   deathAnimTimer = 0;
   deathAnimStage = 0;
+  deathIsPitFall = false;
 
   if (typeof touchControls !== "undefined") {
     touchControls.left = false;
