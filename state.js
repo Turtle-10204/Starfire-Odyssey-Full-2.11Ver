@@ -63,6 +63,28 @@ let isExitingPipe = false;
 
 let isExitingCeilingPipe = false;
 
+// 進／出水管自動對齊中心與 Canvas 裁切遮罩狀態（防止穿模）
+let pipeAlignActive = false;
+
+let pipeTargetX = 0;
+
+let pipeTargetY = 0;
+
+let pipeMouthX = 0;
+
+let pipeMouthY = 0;
+
+let pipeClipDir = "NONE"; // "NONE" | "LEFT_OF_X" | "ABOVE_Y" | "BELOW_Y"
+
+function resetPipeTransitionState() {
+  pipeAlignActive = false;
+  pipeTargetX = 0;
+  pipeTargetY = 0;
+  pipeMouthX = 0;
+  pipeMouthY = 0;
+  pipeClipDir = "NONE";
+}
+
 let flagDropY = 0;
 
 let castleFlagRaised = false;
@@ -148,6 +170,28 @@ let deathIsPitFall = false;
 let currentSprintBonus = 0;
 
 let knockbackVX = 0;      
+
+// 抓牆與無限蹬牆跳系統（2.2 順序 4）
+let isWallSliding = false;
+
+let wallSlideDir = 0;        // -1: 左側有牆, 1: 右側有牆
+
+let lastWallDir = 0;         // 離牆補償期間記錄最後接觸牆壁方向
+
+let wallJumpLockTimer = 0;   // 蹬牆跳後水平輸入鎖定計時器（8 幀）
+
+let wallJumpGraceTimer = 0;  // 離牆後寬容補償計時器（6 幀）
+
+let wallJumpImpulseVX = 0;   // 蹬牆跳水平推力（±5）
+
+function resetWallJumpState() {
+  isWallSliding = false;
+  wallSlideDir = 0;
+  lastWallDir = 0;
+  wallJumpLockTimer = 0;
+  wallJumpGraceTimer = 0;
+  wallJumpImpulseVX = 0;
+}
 
 // 生命值與金幣計數系統
 let lives = 3;
