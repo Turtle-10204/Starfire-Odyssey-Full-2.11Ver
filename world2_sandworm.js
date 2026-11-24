@@ -49,12 +49,19 @@ function updateSandwormBoss(playerW, playerH) {
     rk.vy += 0.48;
     rk.y += rk.vy;
     if (gameState === "PLAYING" && invincibleTimer <= 0 && starTimer <= 0 &&
-        abs(characterX - rk.x) < (playerW / 2 + rk.r * 0.75) &&
-        abs(characterY - rk.y) < (playerH / 2 + rk.r * 0.75)) {
-      wormRocks.splice(i, 1);
-      takeDamage();
-      return;
-    }
+         abs(characterX - rk.x) < (playerW / 2 + rk.r * 0.75) &&
+         abs(characterY - rk.y) < (playerH / 2 + rk.r * 0.75)) {
+       wormRocks.splice(i, 1);
+       if (powerLevel === 3 && powerType === "cactus" && isCrouching) {
+         invincibleTimer = 1000;
+         knockbackVX = (characterX < rk.x ? -1 : 1) * 7.5;
+         playSFX("stomp");
+         floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
+         continue;
+       }
+       takeDamage();
+       return;
+     }
     if (rk.y > 13.5 * TILE_SIZE) {
       wormRocks.splice(i, 1);
     }
@@ -66,12 +73,19 @@ function updateSandwormBoss(playerW, playerH) {
     sw.x += sw.vx;
     sw.life--;
     if (gameState === "PLAYING" && invincibleTimer <= 0 && starTimer <= 0 &&
-        abs(characterX - sw.x) < (playerW / 2 + 16) &&
-        abs(characterY - sw.y) < (playerH / 2 + 24)) {
-      wormShockwaves.splice(i, 1);
-      takeDamage();
-      return;
-    }
+         abs(characterX - sw.x) < (playerW / 2 + 16) &&
+         abs(characterY - sw.y) < (playerH / 2 + 24)) {
+       wormShockwaves.splice(i, 1);
+       if (powerLevel === 3 && powerType === "cactus" && isCrouching) {
+         invincibleTimer = 1000;
+         knockbackVX = (sw.vx < 0 ? -1 : 1) * 8.0;
+         playSFX("stomp");
+         floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
+         continue;
+       }
+       takeDamage();
+       return;
+     }
     if (sw.life <= 0 || sw.x < b.arenaLeft || sw.x > b.arenaRight) {
       wormShockwaves.splice(i, 1);
     }
@@ -366,9 +380,9 @@ function updateSandwormBoss(playerW, playerH) {
   // 玩家本體與巨蟲碰撞判定
   if (gameState === "PLAYING" && tail.y < 13.5 * TILE_SIZE) {
     // 1. 判定是否命中「發光尾部弱點」
-    if (dist(characterX, characterY, tail.x, tail.y) < (playerW / 2 + 30)) {
+    if (b.state !== "COUNTER_SHOCK" && dist(characterX, characterY, tail.x, tail.y) < (playerW / 2 + 30)) {
       if (velocityY > 0 || starTimer > 0 || (powerType === "speed" && currentSprintBonus >= 0.85)) {
-        damageSandworm(15, tail.x, tail.y, true); // 觸發震波彈開！
+        damageSandworm(40, tail.x, tail.y, true); // 踩踏弱點傷害 40（4 下擊敗），並觸發震波彈開！
         return;
       }
     }
@@ -378,10 +392,16 @@ function updateSandwormBoss(playerW, playerH) {
       let seg = b.segments[i];
       if (seg.y > 13.5 * TILE_SIZE) continue;
       if (dist(characterX, characterY, seg.x, seg.y) < (playerW / 2 + 30)) {
-        if (starTimer > 0) {
-          damageSandworm(5, seg.x, seg.y, true);
-          return;
-        } else if (powerType === "speed" && currentSprintBonus >= 0.85) {
+         if (starTimer > 0) {
+           damageSandworm(5, seg.x, seg.y, true);
+           return;
+         } else if (powerLevel === 3 && powerType === "cactus" && isCrouching && invincibleTimer <= 0) {
+           invincibleTimer = 1000;
+           knockbackVX = (characterX < seg.x ? -1 : 1) * 10.5;
+           playSFX("stomp");
+           floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
+           continue;
+         } else if (powerType === "speed" && currentSprintBonus >= 0.85) {
           let pushDir = (characterX < seg.x) ? -1 : 1;
           knockbackVX = pushDir * 10.5;
           velocityY = -7;
