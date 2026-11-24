@@ -201,34 +201,46 @@ function handleExitMapConfirmClick(px, py) {
 // 畫面視角縮放與裝置操作設定視窗 (Settings Modal) - 支援手機橫螢幕自適應高度
 // =====================================================================
 function getSettingsModalRects() {
+  let isMobileMode = (controlMode === "MOBILE");
   let panelW = min(440, width * 0.90);
-  let panelH = min(340, height * 0.92);
+  let panelH = min(isMobileMode ? 390 : 340, height * 0.94);
   let px = width / 2 - panelW / 2;
   let py = height / 2 - panelH / 2;
 
-  let topStart = py + panelH * 0.22;
-  let availH = panelH * 0.72;
-  let rowGap = availH / 4;
+  let topStart = py + panelH * (isMobileMode ? 0.19 : 0.22);
+  let availH = panelH * (isMobileMode ? 0.76 : 0.72);
+  let totalSteps = isMobileMode ? 5 : 4;
+  let rowGap = availH / totalSteps;
   let btnH = min(36, rowGap * 0.80);
   let halfW = (panelW - 84) / 2;
 
-  return {
-    panelW, panelH, px, py, btnH,
+  let rects = {
+    panelW, panelH, px, py, btnH, isMobileMode,
     zoomOut:   { x: px + 36, y: topStart, w: 54, h: btnH },
     zoomIn:    { x: px + panelW - 90, y: topStart, w: 54, h: btnH },
     autoFit:   { x: px + 36, y: topStart + rowGap * 1, w: panelW - 72, h: btnH * 0.92 },
     guideBtn:  { x: px + 36, y: topStart + rowGap * 2, w: panelW - 72, h: btnH * 0.95 },
     modePc:    { x: px + 36, y: topStart + rowGap * 3, w: halfW, h: btnH },
-    modeMob:   { x: px + 48 + halfW, y: topStart + rowGap * 3, w: halfW, h: btnH },
-    muteBtn:   { x: px + 36, y: topStart + rowGap * 4 - btnH * 0.1, w: halfW, h: btnH },
-    closeBtn:  { x: px + 48 + halfW, y: topStart + rowGap * 4 - btnH * 0.1, w: halfW, h: btnH }
+    modeMob:   { x: px + 48 + halfW, y: topStart + rowGap * 3, w: halfW, h: btnH }
   };
+
+  if (isMobileMode) {
+    rects.editMobBtn = { x: px + 36, y: topStart + rowGap * 4, w: panelW - 72, h: btnH * 0.95 };
+    rects.muteBtn    = { x: px + 36, y: topStart + rowGap * 5 - btnH * 0.1, w: halfW, h: btnH };
+    rects.closeBtn   = { x: px + 48 + halfW, y: topStart + rowGap * 5 - btnH * 0.1, w: halfW, h: btnH };
+  } else {
+    rects.editMobBtn = null;
+    rects.muteBtn    = { x: px + 36, y: topStart + rowGap * 4 - btnH * 0.1, w: halfW, h: btnH };
+    rects.closeBtn   = { x: px + 48 + halfW, y: topStart + rowGap * 4 - btnH * 0.1, w: halfW, h: btnH };
+  }
+
+  return rects;
 }
 
 function drawSettingsModal() {
   let r = getSettingsModalRects();
   let curZoom = getEffectiveViewZoom();
-  let compact = (r.panelH < 300);
+  let compact = (r.panelH < 320);
 
   push();
   fill(0, 0, 0, 175);
@@ -244,25 +256,25 @@ function drawSettingsModal() {
   fill("#FFD166");
   textFont("sans-serif");
   textStyle(BOLD);
-  textSize(compact ? 17 : 20);
+  textSize(compact ? 16 : 20);
   textAlign(CENTER, TOP);
-  text("⚙ 遊戲畫面與操作設定", width / 2, r.py + (compact ? 10 : 14));
+  text("⚙ 遊戲畫面與操作設定", width / 2, r.py + (compact ? 8 : 14));
 
   fill("#CBD5E1");
-  textSize(compact ? 11.5 : 13);
-  text("調整鏡頭視角大小（可完整顯示手機橫向畫面）", width / 2, r.py + (compact ? 33 : 42));
+  textSize(compact ? 11 : 13);
+  text("調整鏡頭視角大小（可完整顯示手機橫向畫面）", width / 2, r.py + (compact ? 29 : 42));
 
   fill("#32ADE6");
   rect(r.zoomOut.x, r.zoomOut.y, r.zoomOut.w, r.zoomOut.h, 10);
   rect(r.zoomIn.x, r.zoomIn.y, r.zoomIn.w, r.zoomIn.h, 10);
 
   fill("#FFFFFF");
-  textSize(compact ? 18 : 22);
+  textSize(compact ? 17 : 22);
   textAlign(CENTER, CENTER);
   text("－", r.zoomOut.x + r.zoomOut.w / 2, r.zoomOut.y + r.zoomOut.h / 2);
   text("＋", r.zoomIn.x + r.zoomIn.w / 2, r.zoomIn.y + r.zoomIn.h / 2);
 
-  textSize(compact ? 15 : 17);
+  textSize(compact ? 14 : 17);
   text(`視角倍率：${Math.round(curZoom * 100)}%`, width / 2, r.zoomOut.y + r.zoomOut.h / 2);
 
   fill(autoFitMobileZoom && controlMode === "MOBILE" ? "#34C759" : "#334155");
@@ -283,9 +295,17 @@ function drawSettingsModal() {
   rect(r.modeMob.x, r.modeMob.y, r.modeMob.w, r.modeMob.h, 8);
 
   fill("#FFFFFF");
-  textSize(compact ? 13 : 14);
+  textSize(compact ? 12.5 : 14);
   text("💻 電腦鍵盤", r.modePc.x + r.modePc.w / 2, r.modePc.y + r.modePc.h / 2);
   text("📱 手機觸控", r.modeMob.x + r.modeMob.w / 2, r.modeMob.y + r.modeMob.h / 2);
+
+  if (r.isMobileMode && r.editMobBtn) {
+    fill("#F59E0B");
+    rect(r.editMobBtn.x, r.editMobBtn.y, r.editMobBtn.w, r.editMobBtn.h, 8);
+    fill("#1D2D44");
+    textSize(min(13.5, r.panelW * 0.032));
+    text("🎛 手機按鍵配置（自訂位置／大小／透明度）", r.editMobBtn.x + r.editMobBtn.w / 2, r.editMobBtn.y + r.editMobBtn.h / 2);
+  }
 
   fill(audioMuted ? "#E63946" : "#475569");
   rect(r.muteBtn.x, r.muteBtn.y, r.muteBtn.w, r.muteBtn.h, 8);
@@ -293,6 +313,7 @@ function drawSettingsModal() {
   rect(r.closeBtn.x, r.closeBtn.y, r.closeBtn.w, r.closeBtn.h, 8);
 
   fill("#FFFFFF");
+  textSize(compact ? 12.5 : 14);
   text(audioMuted ? "🔇 音效：靜音" : "🔊 音效：開啟", r.muteBtn.x + r.muteBtn.w / 2, r.muteBtn.y + r.muteBtn.h / 2);
   fill("#1D2D44");
   text("✔ 完成設定", r.closeBtn.x + r.closeBtn.w / 2, r.closeBtn.y + r.closeBtn.h / 2);
@@ -325,6 +346,11 @@ function handleSettingsModalClick(px, py) {
   } else if (inRect(r.modeMob)) {
     controlMode = "MOBILE";
     autoFitMobileZoom = true;
+    playSFX("mapMove");
+  } else if (r.isMobileMode && r.editMobBtn && inRect(r.editMobBtn)) {
+    if (typeof enterMobileControlsEditor === "function") {
+      enterMobileControlsEditor();
+    }
     playSFX("mapMove");
   } else if (inRect(r.muteBtn)) {
     audioMuted = !audioMuted;
