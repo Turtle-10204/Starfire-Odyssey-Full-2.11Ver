@@ -20,7 +20,7 @@ function getDeviceSelectCards() {
       h: cardH,
       title: "電腦版 (PC)",
       sub: "鍵盤操作模式",
-      desc: "方向鍵 / WASD 移動｜空白鍵 / W 跳躍\nF 射擊｜Ctrl 加速｜B 空投｜O 設定",
+      desc: "方向鍵 / WASD 移動｜空白鍵 / W 跳躍\nF 射擊｜Ctrl：切換衝刺 / 時光領域｜B 空投",
       accent: "#32ADE6"
     },
     {
@@ -168,6 +168,16 @@ function drawLevelIntro() {
   textSize(28);
   textAlign(LEFT, CENTER);
   text(`× ${lives}`, width / 2 - 8, height / 2 + 34);
+
+  if (controlMode === "PC") {
+    noStroke();
+    fill("#CBD5E1");
+    textFont("sans-serif");
+    textStyle(NORMAL);
+    textSize(14);
+    textAlign(CENTER, CENTER);
+    text("Ctrl：切換衝刺 / 時光領域  ｜  F：射擊  ｜  B：使用備用道具", width / 2, height / 2 + 86);
+  }
 
   if (millis() - stateTimer > 1500) {
     gameState = "PLAYING";
