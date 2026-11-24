@@ -2,6 +2,48 @@
 // sketch.js — p5 入口：setup() 與 draw() 主迴圈。
 // =====================================================================
 
+let oneWayPlatforms = [];
+let _lastOneWayMapRef = null;
+
+function syncOneWayPlatformsFromMap() {
+  if (typeof levelMap === "undefined" || !Array.isArray(levelMap)) {
+    oneWayPlatforms = [];
+    _lastOneWayMapRef = null;
+    return;
+  }
+  if (_lastOneWayMapRef === levelMap) return;
+  _lastOneWayMapRef = levelMap;
+  oneWayPlatforms = [];
+  for (let r = 0; r < levelMap.length; r++) {
+    for (let c = 0; c < levelMap[r].length; c++) {
+      if (levelMap[r][c] === '=') {
+        oneWayPlatforms.push({
+          x: c * TILE_SIZE,
+          y: r * TILE_SIZE,
+          w: TILE_SIZE,
+          h: 14
+        });
+        // 清成空白，避免未修改的 checkCollision() 將 '=' 視為實心磚塊擋住上方跳躍
+        levelMap[r][c] = ' ';
+      }
+    }
+  }
+}
+
+function drawOneWayPlatforms() {
+  push();
+  noStroke();
+  for (let owp of oneWayPlatforms) {
+    fill("#6C584C");
+    rect(owp.x, owp.y + 4, owp.w, 14, 3);
+    fill("#DDB892");
+    rect(owp.x, owp.y, owp.w, 7, 3);
+    fill("#EDE0D4");
+    rect(owp.x + 4, owp.y + 1, owp.w - 8, 2, 1);
+  }
+  pop();
+}
+
 function getEffectiveViewZoom() {
   if (controlMode === "MOBILE" && autoFitMobileZoom) {
     return constrain(height / (15 * TILE_SIZE), 0.45, 1.35);
@@ -838,6 +880,8 @@ if (isExitingPipe) {
       }
     }
 
+    syncOneWayPlatformsFromMap();
+
     if (velocityY >= 0 && !isOnGround) {
       let newFeetY = characterY + currentHitboxH / 2;
       for (let mp of movingPlatforms) {
@@ -851,6 +895,24 @@ if (isExitingPipe) {
             isShortJump = false;
             featherFlapsLeft = 2;
             platformCarryDX = mp.dx;
+            break;
+          }
+        }
+      }
+    }
+
+    if (velocityY >= 0 && !isOnGround) {
+      let newFeetY = characterY + currentHitboxH / 2;
+      for (let owp of oneWayPlatforms) {
+        if (characterX + currentHitboxW / 2 > owp.x && characterX - currentHitboxW / 2 < owp.x + owp.w) {
+          if (prevFeetY <= owp.y + 8 && newFeetY >= owp.y) {
+            characterY = owp.y - currentHitboxH / 2 - 0.1;
+            velocityY = 0;
+            isOnGround = true;
+            isGliding = false;
+            isActionLocked = false;
+            isShortJump = false;
+            featherFlapsLeft = 2;
             break;
           }
         }
@@ -1213,6 +1275,7 @@ if (isExitingPipe) {
 }
   drawWorld2AtmosphereAndLandmarks(); // 畫在所有磚塊與角色後方
   drawMap(viewWorldW);
+  drawOneWayPlatforms();
   drawMovingPlatforms();
   drawEnemies();
   if (currentLevel === 4) {
