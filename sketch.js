@@ -310,6 +310,7 @@ function draw() {
 
     drawWorld2AtmosphereAndLandmarks();
     drawMap(viewWorldW);
+    drawOneWayPlatforms();
     drawMovingPlatforms();
     drawEnemies();
     if (currentLevel === 4) {
