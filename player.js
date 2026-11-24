@@ -1,6 +1,30 @@
 // =====================================================================
-// player.js — 主角受傷死亡、時光倒流、火球與仙人掌飛針。
+// player.js — 主角受傷死亡、時光倒流、火球與仙人掌飛針、抓牆蹬牆跳。
 // =====================================================================
+
+function tryWallJump() {
+  if (gameState !== "PLAYING" || isOnGround || isCrouching || isExitingPipe || isExitingCeilingPipe) return false;
+  if (playerStunTimer > 0) return false;
+  if (!isWallSliding && wallJumpGraceTimer <= 0) return false;
+
+  let wallDir = isWallSliding ? wallSlideDir : lastWallDir;
+  if (wallDir !== -1 && wallDir !== 1) return false;
+
+  let jumpDir = -wallDir; // 朝牆壁反方向彈開
+  velocityY = -17;
+  wallJumpImpulseVX = jumpDir * 5;
+  wallJumpLockTimer = 8;
+  isWallSliding = false;
+  wallSlideDir = 0;
+  wallJumpGraceTimer = 0;
+  lastWallDir = 0;
+  isGliding = false;
+  isShortJump = false;
+  isActionLocked = false;
+  facingDirection = jumpDir;
+  playSFX("jump");
+  return true;
+}
 
 function getPowerTintColor(type) {
   if (type === "fire") return color(255, 165, 130);
@@ -47,6 +71,7 @@ function takeDamage() {
 }
 
 function handlePlayerDeath(isPitFall = false) {
+  if (typeof resetWallJumpState === "function") resetWallJumpState();
   if (tryChronoTimeRewind()) return; // 掉進深淵/岩漿也能回溯保命
   if (gameState === "DYING_ANIMATION") return; // 防重複觸發
   playSFX("death");
