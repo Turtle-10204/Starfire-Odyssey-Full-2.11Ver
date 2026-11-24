@@ -4,20 +4,65 @@
 
 let oneWayPlatforms = [];
 let _lastOneWayMapRef = null;
+let _lastOneWayStageKey = "";
+let wallSlideParticles = [];
+
+function spawnWallSlideDust(wallX, centerY, hitboxH, wallDir, isBig) {
+  let count = isBig ? 4 : 3;
+  let halfH = hitboxH * 0.46;
+  for (let i = 0; i < count; i++) {
+    // 沿著貼牆那一側，從頭頂 (-halfH) 到腳底 (+halfH) 均勻涵蓋並帶隨機微調
+    let ratio = (count > 1) ? (i / (count - 1)) : 0.5;
+    let spawnY = lerp(centerY - halfH, centerY + halfH, ratio) + random(-4, 4);
+    wallSlideParticles.push({
+      x: wallX - wallDir * random(0.5, 2.5),
+      y: spawnY,
+      vx: -wallDir * random(0.25, 0.95) + random(-0.2, 0.2),
+      vy: random(-1.2, -0.25),
+      size: isBig ? random(2.6, 4.8) : random(1.8, 3.2),
+      alpha: random(185, 235),
+      life: isBig ? 22 : 18
+    });
+  }
+}
+
+function updateAndDrawWallSlideParticles() {
+  push();
+  noStroke();
+  for (let i = wallSlideParticles.length - 1; i >= 0; i--) {
+    let p = wallSlideParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy *= 0.93;
+    p.size *= 0.96;
+    p.alpha -= 10;
+    p.life--;
+
+    fill(255, 255, 255, max(0, p.alpha));
+    ellipse(p.x, p.y, p.size, p.size);
+
+    if (p.life <= 0 || p.alpha <= 0) {
+      wallSlideParticles.splice(i, 1);
+    }
+  }
+  pop();
+}
 
 function syncOneWayPlatformsFromMap() {
-  if (typeof levelMap === "undefined" || !Array.isArray(levelMap)) {
+  if (typeof levelMap === "undefined" || !Array.isArray(levelMap) || levelMap.length === 0) {
     oneWayPlatforms = [];
     _lastOneWayMapRef = null;
+    _lastOneWayStageKey = "";
     return;
   }
-  if (_lastOneWayMapRef === levelMap) return;
-  _lastOneWayMapRef = levelMap;
-  oneWayPlatforms = [];
+  let stageKey = `${currentWorld}-${currentLevel}-${window.isInMinerSupplyRoom ? 1 : 0}-${typeof is2_1SubSecret !== "undefined" && is2_1SubSecret ? 1 : 0}`;
+  if (_lastOneWayMapRef === levelMap && _lastOneWayStageKey === stageKey) return;
+
+  let scanned = [];
   for (let r = 0; r < levelMap.length; r++) {
     for (let c = 0; c < levelMap[r].length; c++) {
       if (levelMap[r][c] === '=') {
-        oneWayPlatforms.push({
+        scanned.push({
           x: c * TILE_SIZE,
           y: r * TILE_SIZE,
           w: TILE_SIZE,
@@ -28,6 +73,12 @@ function syncOneWayPlatformsFromMap() {
       }
     }
   }
+  // 若切換到不同關卡／房間，或本次確實掃描到新的 '=' 平台，才更新陣列；避免同一關卡因陣列參考變動把已建立的平台洗空
+  if (_lastOneWayStageKey !== stageKey || scanned.length > 0) {
+    oneWayPlatforms = scanned;
+  }
+  _lastOneWayMapRef = levelMap;
+  _lastOneWayStageKey = stageKey;
 }
 
 function drawOneWayPlatforms() {
@@ -137,6 +188,7 @@ function drawDeathAnimation() {
 
   drawWorld2AtmosphereAndLandmarks();
   drawMap(viewWorldW);
+  if (typeof drawOneWayPlatforms === "function") drawOneWayPlatforms();
   drawMovingPlatforms();
   drawEnemies();
   if (currentLevel === 4) {
@@ -218,6 +270,797 @@ function drawDeathAnimation() {
       pop();
     }
   }
+}
+
+function updatePlayerPhysicsAndInput(viewWorldW) {
+  let isBig = (powerLevel >= 2);
+
+  // 統一整合「鍵盤 + 手機虛擬按鍵（含手機 DASH 鎖定）」輸入
+  let inputLeft  = keyIsDown(LEFT_ARROW)  || keyIsDown(65) || (controlMode === "MOBILE" && touchControls.left);
+  let inputRight = keyIsDown(RIGHT_ARROW) || keyIsDown(68) || (controlMode === "MOBILE" && touchControls.right);
+  let inputDown  = keyIsDown(DOWN_ARROW)  || keyIsDown(83) || (controlMode === "MOBILE" && touchControls.down);
+  let inputDash  = (controlMode === "MOBILE" ? mobileDashLocked : dashToggleActive);
+
+  // --- 蹲下狀態判斷 ---
+  let standHitboxW = isBig ? BIG_HITBOX_W : BASE_HITBOX_W;
+  let standHitboxH = isBig ? BIG_HITBOX_H : BASE_HITBOX_H;
+
+  let currentFeetY = characterY + prevHitboxH / 2;
+  let standCenterY = currentFeetY - standHitboxH / 2;
+  let hasCeilingAbove = checkCollision(characterX, standCenterY, standHitboxW, standHitboxH);
+
+  if (gameState === "PLAYING" && !showSettingsModal && !isAttacking) {
+    if (isOnGround && inputDown) {
+      isCrouching = true;
+    } else if (isCrouching) {
+      if (!hasCeilingAbove) {
+        isCrouching = false;
+      }
+    }
+  } else if (!hasCeilingAbove) {
+    isCrouching = false;
+  }
+
+  let crouchHitboxFactor = isCrouching ? (isBig ? 0.5 : 0.75) : 1.0;
+  let currentHitboxW = standHitboxW;
+  let currentHitboxH = standHitboxH * crouchHitboxFactor;
+
+  if (currentHitboxH !== prevHitboxH) {
+    characterY += (prevHitboxH - currentHitboxH) / 2;
+    prevHitboxH = currentHitboxH;
+  }
+
+  if (gameState !== "ITEM_GUIDE" && !showSettingsModal && !showExitMapConfirmModal) {
+    updateMovingPlatforms();
+    updateBumpingTiles();
+    updateEnemies(currentHitboxW, currentHitboxH, viewWorldW);
+    if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return { aborted: true }; }
+    if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO" || gameState === "ITEM_GUIDE") {
+      return { aborted: true };
+    }
+    updatePlayerFireballs();
+    updateCactusNeedles();
+    chronoFieldActive = (powerLevel === 3 && powerType === "chrono" && inputDash && gameState === "PLAYING");
+
+    // <--- 新增：2-4 頭燈拾取與火把系統更新
+    if (currentWorld === 2 && currentLevel === 4 && gameState === "PLAYING") {
+      updateMinerLampAndTorches();
+    }
+
+    if (currentLevel === 4) {
+      updateFireBars(currentHitboxW, currentHitboxH);
+      if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return { aborted: true }; }
+      if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO") {
+        return { aborted: true };
+      }
+      updateBossAndFireballs(currentHitboxW, currentHitboxH, viewWorldW);
+      if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return { aborted: true }; }
+      if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO") {
+        return { aborted: true };
+      }
+      updateBridgeCollapse();
+    }
+    if (currentWorld === 2 && currentLevel === 5) {
+      updateSandwormBoss(currentHitboxW, currentHitboxH);
+      updateRescueCutscene();
+    }
+  }
+
+  // --- 1. 處理移動、加速菇漸進衝刺與過場 ---
+  let moveX = 0; 
+  let isMovingInput = (inputRight || inputLeft) && !isAttacking && !isCrouching;
+  let wantsSprint = (powerType === "speed" && inputDash && isMovingInput);
+
+  if (wantsSprint) {
+    currentSprintBonus = min(1.0, currentSprintBonus + 0.022);
+  } else {
+    currentSprintBonus = max(0.0, currentSprintBonus - 0.04);
+  }
+
+  let speedMultiplier = 1.0 + currentSprintBonus * 0.85;
+  if (starTimer > 0) speedMultiplier = max(speedMultiplier, 1.3);
+
+  let effectiveMoveSpeed = isCrouching ? (MOVE_SPEED / 3) : (MOVE_SPEED * speedMultiplier);
+
+  if (gameState === "PLAYING" && !showSettingsModal && !showExitMapConfirmModal) {
+    if (wallJumpLockTimer > 0) {
+      wallJumpLockTimer--;
+      if (wallJumpLockTimer <= 0) {
+        wallJumpLockTimer = 0;
+        wallJumpImpulseVX = 0;
+      }
+    }
+
+    // 自暈 3 秒時無法操作移動，只能等暈眩結束或受傷解除
+    if (playerStunTimer > 0) {
+      playerStunTimer -= deltaTime;
+      if (playerStunTimer < 0) playerStunTimer = 0;
+      currentSprintBonus = 0;
+      resetWallJumpState();
+    } else if (wallJumpLockTimer > 0) {
+      // 蹬牆跳後 8 幀輸入鎖定：維持朝反方向水平推力 5，禁止按反方向鍵抵銷
+      moveX = wallJumpImpulseVX;
+      facingDirection = wallJumpImpulseVX > 0 ? 1 : -1;
+    } else if (!isAttacking) {
+      if (inputRight) { moveX = effectiveMoveSpeed; facingDirection = 1; } 
+      if (inputLeft)  { moveX = -effectiveMoveSpeed; facingDirection = -1; } 
+    }
+
+    if (abs(knockbackVX) > 0.1) {
+      moveX = knockbackVX;
+      knockbackVX *= 0.82;
+      resetWallJumpState();
+    } else {
+      knockbackVX = 0;
+    }
+    
+    let totalDX = moveX + platformCarryDX;
+    characterX += totalDX; 
+    characterX = constrain(characterX, currentHitboxW / 2, levelMap[0].length * TILE_SIZE - currentHitboxW / 2);
+
+    if (flagCol !== -1) {
+      let flagWallX = flagCol * TILE_SIZE + TILE_SIZE / 2;
+      if (characterX + currentHitboxW / 2 > flagWallX) {
+        characterX = flagWallX - currentHitboxW / 2;
+      }
+    }
+
+    // 防穿牆保護：水平移動或蹬牆推力若撞入實體磚塊，逐步貼齊牆緣並清除推力
+    if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
+      characterX -= totalDX;
+      let stepSign = Math.sign(totalDX);
+      let maxSteps = Math.ceil(Math.abs(totalDX));
+      for (let s = 0; s < maxSteps; s++) {
+        if (!checkCollision(characterX + stepSign, characterY, currentHitboxW, currentHitboxH)) {
+          characterX += stepSign;
+        } else {
+          break;
+        }
+      }
+      currentSprintBonus = 0;
+      if (wallJumpLockTimer > 0) {
+        wallJumpLockTimer = 0;
+        wallJumpImpulseVX = 0;
+      }
+    }
+    if (is1_2Intro && isOnGround && inputRight) {
+      checkEnterPipe(characterX, characterY, currentHitboxW, currentHitboxH);
+    }
+    if (currentWorld === 2 && currentLevel === 4 && isOnGround && inputDown) {
+      let footRow = floor((characterY + currentHitboxH / 2 + 4) / TILE_SIZE);
+      let col = floor(characterX / TILE_SIZE);
+      if (footRow >= 0 && footRow < levelMap.length && col >= 0 && col < levelMap[0].length) {
+        let belowTile = levelMap[footRow][col];
+        if ((belowTile === 'p' && !window.isInMinerSupplyRoom) || (belowTile === 'u' && window.isInMinerSupplyRoom)) {
+          // 找出同一根垂直水管左右兩欄，自動對齊該水管正中央
+          let leftCol = col;
+          while (leftCol > 0 && levelMap[footRow][leftCol - 1] === belowTile) leftCol--;
+          let rightCol = col;
+          while (rightCol + 1 < levelMap[footRow].length && levelMap[footRow][rightCol + 1] === belowTile) rightCol++;
+
+          pipeTargetX = ((leftCol + rightCol + 1) / 2) * TILE_SIZE;
+          pipeMouthY = footRow * TILE_SIZE;
+          pipeClipDir = "ABOVE_Y";
+          pipeAlignActive = true;
+
+          gameState = (belowTile === 'p') ? "ENTERING_SUPPLY_PIPE" : "EXITING_SUPPLY_PIPE";
+          stateTimer = millis();
+          isAttacking = false;
+          isCrouching = false;
+          isGliding = false;
+          if (typeof resetWallJumpState === "function") resetWallJumpState();
+          playSFX("shrink");
+        }
+      }
+    }
+
+    if (currentLevel === 4) {
+      checkAxeTrigger(characterX, characterY, currentHitboxW, currentHitboxH);
+    }
+
+  } else if (gameState === "BOSS_DEFEAT_CUTSCENE") {
+    velocityY += gravity;
+    characterY += velocityY;
+    if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
+      let bottomTileRow = floor((characterY + currentHitboxH / 2) / TILE_SIZE);
+      characterY = bottomTileRow * TILE_SIZE - currentHitboxH / 2 - 0.1;
+      velocityY = 0;
+      isOnGround = true;
+    }
+    if (!bridgeCollapsing && boss && !boss.alive) {
+      gameState = "WALK_TO_CASTLE";
+      castleTargetX = 198 * TILE_SIZE;
+    }
+
+  } else if (gameState === "FLAG_SLIDE") {
+    velocityY = 5;
+    characterY += velocityY;
+
+    // 自動找旗桿最頂端與底部位置，讓綠旗同步往下滑動
+    let flagCol = floor(characterX / TILE_SIZE);
+    let topFlagRow = 3;
+    let bottomFlagRow = 11;
+    for (let r = 0; r < levelMap.length; r++) {
+      let t = levelMap[r][flagCol];
+      if (t === 'F' || t === '|' || (currentWorld === 2 && t === 'H')) {
+        topFlagRow = r;
+        break;
+      }
+    }
+    for (let r = topFlagRow; r < levelMap.length; r++) {
+      let t = levelMap[r][flagCol];
+      if (t === 'F' || t === '|' || (currentWorld === 2 && t === 'H')) {
+        bottomFlagRow = r;
+      }
+    }
+    let maxFlagDrop = max(0, (bottomFlagRow - topFlagRow) * TILE_SIZE);
+    flagDropY = constrain(characterY - topFlagRow * TILE_SIZE, 0, maxFlagDrop);
+
+    // 精準偵測旗桿下方地板高度，雙腳踩在草地表面不再陷進地板
+    let groundTopY = (bottomFlagRow + 1) * TILE_SIZE - currentHitboxH / 2 - 0.1;
+    if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
+      let bottomTileRow = floor((characterY + currentHitboxH / 2) / TILE_SIZE);
+      groundTopY = bottomTileRow * TILE_SIZE - currentHitboxH / 2 - 0.1;
+    }
+
+    if (characterY >= groundTopY) {
+      characterY = groundTopY;
+      velocityY = 0;
+      isOnGround = true;
+      flagDropY = maxFlagDrop;
+      gameState = "WALK_TO_CASTLE";
+    }
+
+  } else if (gameState === "WALK_TO_CASTLE") {
+    if (!hideCharacter) {
+      moveX = 3;
+      facingDirection = 1;
+      characterX += moveX;
+      if (characterX >= castleTargetX) {
+        characterX = castleTargetX;
+        hideCharacter = true; 
+        stateTimer = millis();
+        castleFlagRaised = true;
+        castleFlagProgress = 0;
+        let topCastleRow = 8;
+        for (let r = 0; r < levelMap.length; r++) {
+          if (levelMap[r].includes('C')) {
+            topCastleRow = r;
+            break;
+          }
+        }
+        castleRoofTopY = topCastleRow * TILE_SIZE;
+        // <--- 新增：2-4 過關抵達城堡時，頭燈與剩余火把化為白煙消散
+        if (currentWorld === 2 && currentLevel === 4 && (hasMinerHeadlamp || torchCount > 0)) {
+          for (let s = 0; s < 14; s++) {
+            endClearBonusSmoke.push({
+              x: characterX + random(-18, 18),
+              y: characterY + random(-25, 10),
+              vx: random(-1.5, 1.5),
+              vy: random(-2.5, -0.8),
+              r: random(10, 22),
+              alpha: 240
+            });
+          }
+          hasMinerHeadlamp = false;
+          torchCount = 0;
+          placedTorches = [];
+          playSFX("powerup");
+          floatingTexts.push({ text: "礦坑裝備已歸還！", x: characterX - 60, y: characterY - 55, vy: -1.2, life: 80 });
+        }
+      }
+    } else {
+      if (millis() - stateTimer > 1500) {
+        let curId = `${currentWorld}-${currentLevel}`;
+        let node = mapNodesData[curId];
+        if (node) {
+          node.cleared = true;
+          // 判斷是否為秘密終點過關（後續關卡會設定 isSecretClear = true）
+          let unlockList = (typeof isSecretClear !== "undefined" && isSecretClear && node.nextSecret)
+            ? node.nextSecret
+            : (node.nextNormal || []);
+
+          for (let nextId of unlockList) {
+            if (mapNodesData[nextId]) {
+              mapNodesData[nextId].unlocked = true;
+            }
+          }
+        }
+
+        // 通過任意關卡後，沙漠補給屋重新開門營業！
+        if (mapNodesData["2-SHOP"]) {
+          mapNodesData["2-SHOP"].isOpen = true;
+        }
+
+        if (curId === "1-4") {
+          // 回到 World 1 大地圖並播放 1-4 城堡白旗 → 聚光燈轉場動畫
+          currentWorld = 1;
+          selectedMapNode = "1-4";
+          worldTransition = {
+            active: true,
+            phase: "WHITE_FLAG",
+            timer: millis(),
+            flagProgress: 0,
+            roadProgress: 0,
+            spotlightR: max(width, height)
+          };
+          gameState = "WORLD_MAP";
+        } else if (curId === "2-5") {
+          gameState = "ALL_CLEAR";
+        } else {
+          // 自動將游標移到剛解鎖的下一關
+          let nextTargets = (typeof isSecretClear !== "undefined" && isSecretClear && node && node.nextSecret)
+            ? node.nextSecret
+            : (node && node.nextNormal ? node.nextNormal : []);
+          if (nextTargets.length > 0 && mapNodesData[nextTargets[0]]) {
+            selectedMapNode = nextTargets[0];
+          }
+          gameState = "WORLD_MAP";
+        }
+      }
+    }
+
+  } else if (gameState === "ENTERING_PIPE") {
+    // 1-2 橫管：先對齊橫管中心地板高度，再平滑走進管子中心（管口裁切防穿模）
+    facingDirection = 1;
+    pipeClipDir = "LEFT_OF_X";
+    if (pipeAlignActive && abs(characterY - pipeTargetY) > 1.5) {
+      moveX = 1.2;
+      characterY += Math.sign(pipeTargetY - characterY) * min(2.0, abs(pipeTargetY - characterY));
+      characterX += moveX;
+      stateTimer = millis(); // 對齊高度後再開始計算進管時間
+    } else {
+      pipeAlignActive = false;
+      characterY = pipeTargetY;
+      moveX = 2.1;
+      characterX = min(pipeTargetX, characterX + moveX);
+    }
+
+    if (characterX - currentHitboxW / 2 >= pipeMouthX || millis() - stateTimer > 700) {
+      hideCharacter = true;
+    }
+    if (millis() - stateTimer > 1050) {
+      resetPipeTransitionState();
+      // 切換到 MAP_1_2
+      is1_2Intro = false;
+      loadLevelMap(MAP_1_2);
+      spawnLevelEnemies(2);
+
+      // 在 1-2 地下場景左側地面上放一根「地下入口水管」，讓主角從管口鑽出來
+      let pipeCol = 2;
+      let groundRow = 13;
+      for (let r = levelMap.length - 1; r >= 0; r--) {
+        if (levelMap[r][pipeCol] === 'G' || levelMap[r][pipeCol] === 'B') {
+          groundRow = r;
+          break;
+        }
+      }
+      if (groundRow >= 3) {
+        levelMap[groundRow - 1][pipeCol] = 'P';
+        levelMap[groundRow - 2][pipeCol] = 'P';
+      }
+
+      cameraX = 0;
+      characterX = pipeCol * TILE_SIZE + TILE_SIZE / 2;
+      characterY = (groundRow - 1) * TILE_SIZE + 12;
+      velocityY = 0;
+      hideCharacter = false;
+      castleFlagRaised = false;
+      castleFlagProgress = 0;
+      stateTimer = millis();
+      isExitingPipe = true;
+      gameState = "PLAYING";
+    }
+  } else if (gameState === "ENTERING_SUPPLY_PIPE") {
+    // 2-4 進入補給室：先自動水平走到水管正中心，再垂直下沉進管（管口裁切防穿模）
+    pipeClipDir = "ABOVE_Y";
+    if (pipeAlignActive && abs(characterX - pipeTargetX) > 1.5) {
+      let stepX = Math.sign(pipeTargetX - characterX) * min(2.2, abs(pipeTargetX - characterX));
+      facingDirection = stepX > 0 ? 1 : -1;
+      moveX = stepX;
+      characterX += stepX;
+      stateTimer = millis(); // 走到中心後再開始下沉計時
+    } else {
+      pipeAlignActive = false;
+      characterX = pipeTargetX;
+      moveX = 0;
+      characterY += 1.9;
+    }
+    if (millis() - stateTimer > 550) {
+      resetPipeTransitionState();
+      let spawnCopy = initialW2L4Spawns;
+      if (!spawnCopy) {
+        let fallbackData = buildWorld2Level(4);
+        spawnCopy = {
+          enemySpawns: (fallbackData.enemySpawns || []).map(sp => ({ ...sp })),
+          platformSpawns: (fallbackData.platformSpawns || []).map(pl => ({ ...pl }))
+        };
+        initialW2L4Spawns = spawnCopy;
+      }
+      saved2_4MainState = {
+        mapStrings: levelMap.map(r => r.join('')),
+        enemySpawns: spawnCopy.enemySpawns.map(sp => ({ ...sp })),
+        platformSpawns: spawnCopy.platformSpawns.map(pl => ({ ...pl }))
+      };
+      window.isInMinerSupplyRoom = true;
+      let roomData = buildWorld2MinerSupplyRoom();
+      loadLevelMap(roomData.mapStrings);
+      movingPlatforms = [];
+      enemies = [];
+      if (!hasMinerHeadlamp) {
+        minerLampPickup = { x: 12.5 * TILE_SIZE + 20, y: 12 * TILE_SIZE + 12, taken: false };
+      }
+      characterX = 2.5 * TILE_SIZE;
+      characterY = 2.2 * TILE_SIZE;
+      velocityY = 0;
+      cameraX = 0;
+      isExitingCeilingPipe = true;
+      playSFX("shrink");
+      gameState = "PLAYING";
+      floatingTexts.push({ text: "礦工裝備補給站（全亮區域）", x: characterX, y: 4.5 * TILE_SIZE, vy: -1, life: 95, isOneUp: true });
+    }
+  } else if (gameState === "EXITING_SUPPLY_PIPE") {
+    // 2-4 離開補給室：先自動水平走到水管正中心，再垂直下沉進管（管口裁切防穿模）
+    pipeClipDir = "ABOVE_Y";
+    if (pipeAlignActive && abs(characterX - pipeTargetX) > 1.5) {
+      let stepX = Math.sign(pipeTargetX - characterX) * min(2.2, abs(pipeTargetX - characterX));
+      facingDirection = stepX > 0 ? 1 : -1;
+      moveX = stepX;
+      characterX += stepX;
+      stateTimer = millis();
+    } else {
+      pipeAlignActive = false;
+      characterX = pipeTargetX;
+      moveX = 0;
+      characterY += 1.9;
+    }
+    if (millis() - stateTimer > 550) {
+      resetPipeTransitionState();
+      window.isInMinerSupplyRoom = false;
+      let usedFallback = false;
+      let targetState = saved2_4MainState;
+      if (!targetState || !Array.isArray(targetState.mapStrings) || targetState.mapStrings.length === 0) {
+        usedFallback = true;
+        let fallbackData = buildWorld2Level(4);
+        targetState = {
+          mapStrings: fallbackData.mapStrings,
+          enemySpawns: initialW2L4Spawns ? initialW2L4Spawns.enemySpawns : (fallbackData.enemySpawns || []),
+          platformSpawns: initialW2L4Spawns ? initialW2L4Spawns.platformSpawns : (fallbackData.platformSpawns || [])
+        };
+      }
+      loadLevelMap(targetState.mapStrings);
+      movingPlatforms = (targetState.platformSpawns || []).map(pl => ({ ...pl }));
+      enemies = [];
+      for (let sp of (targetState.enemySpawns || [])) {
+        let h = sp.type === "goomba" ? 30 : 38;
+        enemies.push({
+          type: sp.type,
+          x: sp.col * TILE_SIZE + 20,
+          y: sp.row * TILE_SIZE - h / 2 - 12,
+          baseY: sp.row * TILE_SIZE - h / 2 - 24,
+          w: 30, h: h, vx: -1.4, vy: 0,
+          shellMoving: false, dead: false, flyPhase: random(TWO_PI),
+          stunTimer: 0, knockbackX: 0
+        });
+      }
+      characterX = 3 * TILE_SIZE;
+      characterY = 12 * TILE_SIZE - currentHitboxH / 2 - 2;
+      velocityY = 0;
+      cameraX = 0;
+      gameState = "PLAYING";
+      if (usedFallback) {
+        floatingTexts.push({ text: "地圖資料異常，已返回入口", x: characterX - 40, y: characterY - 35, vy: -1, life: 95, isOneUp: true });
+      } else {
+        floatingTexts.push({ text: "進入幽暗古礦坑！按 [E] 插火把", x: characterX - 40, y: characterY - 35, vy: -1, life: 95, isOneUp: true });
+      }
+    }
+  } else if (gameState === "ENTERING_QUICKSAND") {
+    let elapsed = millis() - stateTimer;
+    moveX = 0;
+    velocityY = 0;
+    characterY += 1.2;
+
+    if (elapsed > 550) {
+      is2_1SubSecret = true;
+      let subData = buildWorld2SubSecretMap();
+      loadLevelMap(subData.mapStrings);
+      enemies = [];
+      for (let sp of subData.enemySpawns) {
+        let h = sp.type === "goomba" ? 30 : 38;
+        enemies.push({
+          type: sp.type, x: sp.col * TILE_SIZE + 20, y: sp.row * TILE_SIZE - h / 2 - 12,
+          baseY: sp.row * TILE_SIZE - h / 2 - 24, w: 30, h: h, vx: -1.4, vy: 0,
+          shellMoving: false, dead: false, flyPhase: random(TWO_PI), stunTimer: 0, knockbackX: 0
+        });
+      }
+      characterX = 3 * TILE_SIZE;
+      characterY = 4 * TILE_SIZE;
+      velocityY = 0;
+      cameraX = 0;
+      quicksandFadeInTimer = millis();
+      gameState = "PLAYING";
+      floatingTexts.push({ text: "被流沙吸入地下秘室！尋找紅色終點旗！", x: characterX, y: characterY - 30, vy: -1, life: 110, isOneUp: true });
+    }
+  }
+
+  if (isExitingPipe) {
+    moveX = 0;
+    velocityY = 0;
+    characterY -= 1.5;
+    let pipeCol = floor(characterX / TILE_SIZE);
+    let pipeTopRow = 11;
+    for (let r = 0; r < levelMap.length; r++) {
+      if (levelMap[r][pipeCol] === 'P') {
+        pipeTopRow = r;
+        break;
+      }
+    }
+    pipeMouthY = pipeTopRow * TILE_SIZE;
+    pipeClipDir = "ABOVE_Y";
+    let targetStandY = pipeTopRow * TILE_SIZE - currentHitboxH / 2 - 0.5;
+    if (characterY <= targetStandY) {
+      characterY = targetStandY;
+      isExitingPipe = false;
+      resetPipeTransitionState();
+    }
+  }
+
+  // --- 2. 物理系統與碰撞偵測 ---
+  if (isExitingCeilingPipe) {
+    moveX = 0;
+    velocityY = 0;
+    characterY += 1.4; // 慢慢從天花板水管往下鑽出
+
+    // 自動偵測天花板水管最底端管口的 Y 座標
+    let pipeCol = floor(characterX / TILE_SIZE);
+    let mouthBottomY = 4 * TILE_SIZE;
+    for (let r = 2; r < levelMap.length; r++) {
+      let t = levelMap[r][pipeCol];
+      if (t === 'P' || t === 'p' || t === 'u') {
+        mouthBottomY = (r + 1) * TILE_SIZE;
+      } else {
+        break;
+      }
+    }
+    pipeMouthY = mouthBottomY;
+    pipeClipDir = "BELOW_Y";
+
+    // 等到主角頭頂完全離開管口下方，就解除動畫並自然落下
+    let headTopY = characterY - currentHitboxH / 2;
+    if (headTopY >= mouthBottomY + 2) {
+      isExitingCeilingPipe = false;
+      resetPipeTransitionState();
+      velocityY = 1.5;
+    }
+  }
+
+  platformCarryDX = 0;
+
+  if (!isExitingPipe && !isExitingCeilingPipe && ((gameState === "PLAYING" && !showSettingsModal) || gameState === "WALK_TO_CASTLE")) {
+    if (isGliding && velocityY > 0) {
+      velocityY += gravity * 0.2; 
+      if (velocityY > 2) velocityY = 2; 
+    } else {
+      velocityY += gravity;    
+    }
+    
+    let prevFeetY = characterY + currentHitboxH / 2;
+    characterY += velocityY; 
+    isOnGround = false; 
+    
+    if (velocityY < 0) {
+      let headY = characterY - currentHitboxH / 2;
+      let hitHiddenLeft  = checkHiddenBlockHit(characterX - currentHitboxW * 0.25, headY);
+      let hitHiddenRight = checkHiddenBlockHit(characterX + currentHitboxW * 0.25, headY);
+      if (hitHiddenLeft || hitHiddenRight) {
+        let topTileRow = floor(headY / TILE_SIZE);
+        characterY = (topTileRow + 1) * TILE_SIZE + currentHitboxH / 2 + 0.1;
+        velocityY = 0;
+      }
+    }
+
+    if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
+      if (velocityY > 0) { 
+        let bottomTileRow = floor((characterY + currentHitboxH / 2) / TILE_SIZE);
+        characterY = bottomTileRow * TILE_SIZE - currentHitboxH / 2 - 0.1; 
+        velocityY = 0; 
+        isOnGround = true; 
+        isGliding = false; 
+        isActionLocked = false; 
+        isShortJump = false; 
+        featherFlapsLeft = 2;
+
+        // 每 10 幀紀錄一次地面安全座標供時光回溯使用
+        if (gameState === "PLAYING" && frameCount % 10 === 0) {
+          safePositionHistory.push({ x: characterX, y: characterY });
+          if (safePositionHistory.length > 12) safePositionHistory.shift();
+        }
+      } else if (velocityY < 0) { 
+        let topTileRow = floor((characterY - currentHitboxH / 2) / TILE_SIZE);
+        characterY = (topTileRow + 1) * TILE_SIZE + currentHitboxH / 2 + 0.1; 
+        velocityY = 0; 
+        
+        checkHitTile(characterX - currentHitboxW * 0.48, characterY - currentHitboxH / 2 - 4);
+        checkHitTile(characterX, characterY - currentHitboxH / 2 - 4);
+        checkHitTile(characterX + currentHitboxW * 0.48, characterY - currentHitboxH / 2 - 4);
+      }
+    }
+
+    syncOneWayPlatformsFromMap();
+
+    if (velocityY >= 0 && !isOnGround) {
+      let newFeetY = characterY + currentHitboxH / 2;
+      for (let mp of movingPlatforms) {
+        if (characterX + currentHitboxW / 2 > mp.x && characterX - currentHitboxW / 2 < mp.x + mp.w) {
+          if (prevFeetY <= mp.y + 8 && newFeetY >= mp.y) {
+            characterY = mp.y - currentHitboxH / 2 - 0.1;
+            velocityY = 0;
+            isOnGround = true;
+            isGliding = false;
+            isActionLocked = false;
+            isShortJump = false;
+            featherFlapsLeft = 2;
+            platformCarryDX = mp.dx;
+            break;
+          }
+        }
+      }
+    }
+
+    if (velocityY >= 0 && !isOnGround) {
+      let newFeetY = characterY + currentHitboxH / 2;
+      for (let owp of oneWayPlatforms) {
+        if (characterX + currentHitboxW / 2 > owp.x && characterX - currentHitboxW / 2 < owp.x + owp.w) {
+          if (prevFeetY <= owp.y + 8 && newFeetY >= owp.y) {
+            characterY = owp.y - currentHitboxH / 2 - 0.1;
+            velocityY = 0;
+            isOnGround = true;
+            isGliding = false;
+            isActionLocked = false;
+            isShortJump = false;
+            featherFlapsLeft = 2;
+            break;
+          }
+        }
+      }
+    }
+
+    // --- 抓牆（Wall Slide）與離牆補償計時器更新 ---
+    if (isOnGround) {
+      isWallSliding = false;
+      wallSlideDir = 0;
+      wallJumpGraceTimer = 0;
+      lastWallDir = 0;
+    } else {
+      // 呼叫 checkCollision 實際探測左右實體牆壁邊緣（不依賴 facingDirection，且不會誤判移動平台）
+      let touchWallLeft = checkCollision(characterX - 2, characterY, currentHitboxW, currentHitboxH);
+      let touchWallRight = checkCollision(characterX + 2, characterY, currentHitboxW, currentHitboxH);
+
+      // 允許漂浮（isGliding）期間碰牆時直接解除漂浮並銜接滑落動作
+      let canWallSlide = (
+        gameState === "PLAYING" &&
+        !showSettingsModal &&
+        !showExitMapConfirmModal &&
+        velocityY > 0 &&
+        !isCrouching &&
+        !isAttacking &&
+        playerStunTimer <= 0 &&
+        wallJumpLockTimer <= 0
+      );
+
+      if (canWallSlide && ((touchWallLeft && inputLeft) || (touchWallRight && inputRight))) {
+        isGliding = false;
+        isActionLocked = false;
+        isWallSliding = true;
+        wallSlideDir = touchWallLeft ? -1 : 1;
+        lastWallDir = wallSlideDir;
+        wallJumpGraceTimer = 6; // 抓牆中維持 6 幀離牆寬容補償
+        if (velocityY > 2.5) {
+          velocityY = 2.5; // 滑牆速度上限 2.5 像素/幀，不設時間限制
+        }
+        // 每 2 幀沿著貼牆那一側從上到下噴出白色細小粉塵（依角色大小調整）
+        if (frameCount % 2 === 0) {
+          let wallContactX = characterX + wallSlideDir * (currentHitboxW / 2);
+          spawnWallSlideDust(wallContactX, characterY, currentHitboxH, wallSlideDir, isBig);
+        }
+      } else {
+        isWallSliding = false;
+        wallSlideDir = 0;
+        if (wallJumpGraceTimer > 0) {
+          wallJumpGraceTimer--;
+          if (wallJumpGraceTimer <= 0) {
+            wallJumpGraceTimer = 0;
+            lastWallDir = 0;
+          }
+        }
+      }
+    }
+
+    // World 2 流沙 ('Q') 與仙人掌刺柱 ('K') 互動
+    if (currentWorld === 2 && gameState === "PLAYING") {
+      let pCol = floor(characterX / TILE_SIZE);
+      let footRow = floor((characterY + currentHitboxH / 2 - 4) / TILE_SIZE);
+      let bodyRow = floor(characterY / TILE_SIZE);
+
+      if (footRow >= 0 && footRow < levelMap.length && pCol >= 0 && pCol < levelMap[0].length) {
+        if (levelMap[footRow][pCol] === 'V' && !is2_1SubSecret) {
+          // 跟一般流沙一樣慢慢往下沉（按跳還可以逃出來）
+          if (velocityY > 0.5) velocityY = 0.5;
+          isOnGround = true;
+          isActionLocked = false;
+
+          // 只有整個人沉到流沙格子最底部（第 14 排底部）時，啟動平滑轉場進入地下密室
+          let bottomOfSandY = (footRow + 1) * TILE_SIZE;
+          if (characterY + currentHitboxH / 2 >= bottomOfSandY - 2 && gameState === "PLAYING") {
+            gameState = "ENTERING_QUICKSAND";
+            stateTimer = millis();
+            quicksandExitMode = false;
+            playSFX("shrink");
+          }
+        }
+        if (levelMap[footRow][pCol] === 'Q') {
+          if (powerLevel === 3 && powerType === "chrono") {
+            if (velocityY > 0) {
+              velocityY = 0;
+              characterY = footRow * TILE_SIZE - currentHitboxH / 2;
+              isOnGround = true;
+            }
+          } else {
+            // 減慢下沉速度，給玩家充足反應時間
+            if (velocityY > 0.42) velocityY = 0.42;
+            isOnGround = true;
+            isActionLocked = false;
+
+            // 偵測玩家按跳躍鍵：每按一次就把雙腳往上拔一截並給予脫困向上衝量
+            if (keyIsDown(UP_ARROW) || keyIsDown(87) || keyIsDown(32)) {
+              characterY -= 12;
+              velocityY = -10.5;
+              isOnGround = false;
+              playSFX("jump");
+            } else if (frameCount % 22 === 0) {
+              floatingTexts.push({ text: "流沙！連跳脫困", x: characterX - 35, y: characterY - 35, vy: -0.8, life: 25 });
+            }
+          }
+        }
+      }
+
+      if (bodyRow >= 0 && bodyRow < levelMap.length && pCol >= 0 && pCol < levelMap[0].length) {
+        if (levelMap[bodyRow][pCol] === 'K') {
+          if (starTimer > 0 || (powerLevel === 3 && powerType === "cactus" && isCrouching)) {
+            levelMap[bodyRow][pCol] = ' ';
+            spawnBrickParticles(pCol * TILE_SIZE + 20, bodyRow * TILE_SIZE + 20);
+            playSFX("brick");
+            score += 200;
+          } else {
+            takeDamage();
+            return { aborted: true };
+          }
+        }
+      }
+    }
+    if (gameState === "PLAYING" && checkLavaHazard(characterX, characterY, currentHitboxW, currentHitboxH)) {
+      handlePlayerDeath();
+      return { aborted: true };
+    }
+  }
+
+  if (gameState === "PLAYING") {
+    checkFlagpole(characterX, characterY, currentHitboxW, currentHitboxH);
+  }
+
+  if (characterY > levelMap.length * TILE_SIZE + 80) {
+    handlePlayerDeath(true);
+    if (gameState === "DYING_ANIMATION") drawDeathAnimation();
+    return { aborted: true };
+  }
+
+  return {
+    aborted: false,
+    moveX: moveX,
+    isBig: isBig,
+    currentHitboxW: currentHitboxW,
+    currentHitboxH: currentHitboxH
+  };
 }
 
 function draw() { 
@@ -310,8 +1153,18 @@ function draw() {
 
     drawWorld2AtmosphereAndLandmarks();
     drawMap(viewWorldW);
-    drawOneWayPlatforms();
+    if (typeof drawOneWayPlatforms === "function") drawOneWayPlatforms();
     drawMovingPlatforms();
+    if (currentWorld === 2 && currentLevel === 5 && typeof drawSandwormBoss === "function") {
+      drawSandwormBoss();
+    } else if (currentWorld === 1 && currentLevel === 4 && typeof drawBoss === "function") {
+      drawBoss();
+    }
+  if (currentWorld === 2 && currentLevel === 5 && typeof drawSandwormBoss === "function") {
+    drawSandwormBoss();
+  } else if (currentWorld === 1 && currentLevel === 4 && typeof drawBoss === "function") {
+    drawBoss();
+  }
     drawEnemies();
     if (currentLevel === 4) {
       drawFireBars();
@@ -360,646 +1213,16 @@ function draw() {
     return;
   }
 
-  let isBig = (powerLevel >= 2);
+  let physRes = updatePlayerPhysicsAndInput(viewWorldW);
+  if (physRes.aborted) return;
+  let { moveX, isBig, currentHitboxW, currentHitboxH } = physRes;
 
-  // 統一整合「鍵盤 + 手機虛擬按鍵（含手機 DASH 鎖定）」輸入
-  let inputLeft  = keyIsDown(LEFT_ARROW)  || keyIsDown(65) || (controlMode === "MOBILE" && touchControls.left);
-  let inputRight = keyIsDown(RIGHT_ARROW) || keyIsDown(68) || (controlMode === "MOBILE" && touchControls.right);
-  let inputDown  = keyIsDown(DOWN_ARROW)  || keyIsDown(83) || (controlMode === "MOBILE" && touchControls.down);
-  let inputDash  = (controlMode === "MOBILE" ? mobileDashLocked : dashToggleActive);
-
-  // --- 蹲下狀態判斷 ---
-  let standHitboxW = isBig ? BIG_HITBOX_W : BASE_HITBOX_W;
-  let standHitboxH = isBig ? BIG_HITBOX_H : BASE_HITBOX_H;
-
-  let currentFeetY = characterY + prevHitboxH / 2;
-  let standCenterY = currentFeetY - standHitboxH / 2;
-  let hasCeilingAbove = checkCollision(characterX, standCenterY, standHitboxW, standHitboxH);
-
-  if (gameState === "PLAYING" && !showSettingsModal && !isAttacking) {
-    if (isOnGround && inputDown) {
-      isCrouching = true;
-    } else if (isCrouching) {
-      if (!hasCeilingAbove) {
-        isCrouching = false;
-      }
-    }
-  } else if (!hasCeilingAbove) {
-    isCrouching = false;
-  }
-
-  let crouchHitboxFactor = isCrouching ? (isBig ? 0.5 : 0.75) : 1.0;
-  let currentHitboxW = standHitboxW;
-  let currentHitboxH = standHitboxH * crouchHitboxFactor;
-
-  if (currentHitboxH !== prevHitboxH) {
-    characterY += (prevHitboxH - currentHitboxH) / 2;
-    prevHitboxH = currentHitboxH;
-  }
-
-  if (gameState !== "ITEM_GUIDE" && !showSettingsModal && !showExitMapConfirmModal) {
-    updateMovingPlatforms();
-    updateBumpingTiles();
-    updateEnemies(currentHitboxW, currentHitboxH, viewWorldW);
-    if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return; }
-    if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO" || gameState === "ITEM_GUIDE") return;
-    updatePlayerFireballs();
-    updateCactusNeedles();
-    chronoFieldActive = (powerLevel === 3 && powerType === "chrono" && inputDash && gameState === "PLAYING");
-
-    // <--- 新增：2-4 頭燈拾取與火把系統更新
-    if (currentWorld === 2 && currentLevel === 4 && gameState === "PLAYING") {
-      updateMinerLampAndTorches();
-    }
-
-    if (currentLevel === 4) {
-      updateFireBars(currentHitboxW, currentHitboxH);
-      if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return; }
-      if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO") return;
-      updateBossAndFireballs(currentHitboxW, currentHitboxH, viewWorldW);
-      if (gameState === "DYING_ANIMATION") { drawDeathAnimation(); return; }
-      if (gameState === "TRANSFORM_FREEZE" || gameState === "GAME_OVER" || gameState === "LEVEL_INTRO") return;
-      updateBridgeCollapse();
-    }
-    if (currentWorld === 2 && currentLevel === 5) {
-      updateSandwormBoss(currentHitboxW, currentHitboxH);
-      updateRescueCutscene();
-    }
-  }
-
-  // --- 1. 處理移動、加速菇漸進衝刺與過場 ---
-  let moveX = 0; 
-  let isMovingInput = (inputRight || inputLeft) && !isAttacking && !isCrouching;
-  let wantsSprint = (powerType === "speed" && inputDash && isMovingInput);
-
-  if (wantsSprint) {
-    currentSprintBonus = min(1.0, currentSprintBonus + 0.022);
-  } else {
-    currentSprintBonus = max(0.0, currentSprintBonus - 0.04);
-  }
-
-  let speedMultiplier = 1.0 + currentSprintBonus * 0.85;
-  if (starTimer > 0) speedMultiplier = max(speedMultiplier, 1.3);
-
-  let effectiveMoveSpeed = isCrouching ? (MOVE_SPEED / 3) : (MOVE_SPEED * speedMultiplier);
-
-  if (gameState === "PLAYING" && !showSettingsModal && !showExitMapConfirmModal) {
-    // 自暈 3 秒時無法操作移動，只能等暈眩結束或受傷解除
-    if (playerStunTimer > 0) {
-      playerStunTimer -= deltaTime;
-      if (playerStunTimer < 0) playerStunTimer = 0;
-      currentSprintBonus = 0;
-    } else if (!isAttacking) {
-      if (inputRight) { moveX = effectiveMoveSpeed; facingDirection = 1; } 
-      if (inputLeft)  { moveX = -effectiveMoveSpeed; facingDirection = -1; } 
-    }
-
-    if (abs(knockbackVX) > 0.1) {
-      moveX = knockbackVX;
-      knockbackVX *= 0.82;
-    } else {
-      knockbackVX = 0;
-    }
-    
-    characterX += moveX + platformCarryDX; 
-    characterX = constrain(characterX, currentHitboxW / 2, levelMap[0].length * TILE_SIZE - currentHitboxW / 2);
-
-    if (flagCol !== -1) {
-      let flagWallX = flagCol * TILE_SIZE + TILE_SIZE / 2;
-      if (characterX + currentHitboxW / 2 > flagWallX) {
-        characterX = flagWallX - currentHitboxW / 2;
-      }
-    }
-
-    if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
-      characterX -= (moveX + platformCarryDX); 
-      currentSprintBonus = 0;
-    }
-
-    if (is1_2Intro && inputRight) {
-      checkEnterPipe(characterX, characterY, currentHitboxW, currentHitboxH);
-    }
-    if (currentWorld === 2 && currentLevel === 4 && isOnGround && inputDown) {
-    let footRow = floor((characterY + currentHitboxH / 2 + 4) / TILE_SIZE);
-    let col = floor(characterX / TILE_SIZE);
-    if (footRow >= 0 && footRow < levelMap.length && col >= 0 && col < levelMap[0].length) {
-      let belowTile = levelMap[footRow][col];
-      if (belowTile === 'p' && !window.isInMinerSupplyRoom) {
-        gameState = "ENTERING_SUPPLY_PIPE";
-        stateTimer = millis();
-        playSFX("shrink");
-      } else if (belowTile === 'u' && window.isInMinerSupplyRoom) {
-        gameState = "EXITING_SUPPLY_PIPE";
-        stateTimer = millis();
-        playSFX("shrink");
-      }
-    }
-  }
-
-    if (currentLevel === 4) {
-      checkAxeTrigger(characterX, characterY, currentHitboxW, currentHitboxH);
-    }
-
-  } else if (gameState === "BOSS_DEFEAT_CUTSCENE") {
-    velocityY += gravity;
-    characterY += velocityY;
-    if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
-      let bottomTileRow = floor((characterY + currentHitboxH / 2) / TILE_SIZE);
-      characterY = bottomTileRow * TILE_SIZE - currentHitboxH / 2 - 0.1;
-      velocityY = 0;
-      isOnGround = true;
-    }
-    if (!bridgeCollapsing && boss && !boss.alive) {
-      gameState = "WALK_TO_CASTLE";
-      castleTargetX = 198 * TILE_SIZE;
-    }
-
-  } else if (gameState === "FLAG_SLIDE") {
-    velocityY = 5;
-    characterY += velocityY;
-
-    // 自動找旗桿最頂端與底部位置，讓綠旗同步往下滑動
-    let flagCol = floor(characterX / TILE_SIZE);
-    let topFlagRow = 3;
-    let bottomFlagRow = 11;
-    for (let r = 0; r < levelMap.length; r++) {
-      let t = levelMap[r][flagCol];
-      if (t === 'F' || t === '|' || (currentWorld === 2 && t === 'H')) {
-        topFlagRow = r;
-        break;
-      }
-    }
-    for (let r = topFlagRow; r < levelMap.length; r++) {
-      let t = levelMap[r][flagCol];
-      if (t === 'F' || t === '|' || (currentWorld === 2 && t === 'H')) {
-        bottomFlagRow = r;
-      }
-    }
-    let maxFlagDrop = max(0, (bottomFlagRow - topFlagRow) * TILE_SIZE);
-    flagDropY = constrain(characterY - topFlagRow * TILE_SIZE, 0, maxFlagDrop);
-
-    // 精準偵測旗桿下方地板高度，雙腳踩在草地表面不再陷進地板
-    let groundTopY = (bottomFlagRow + 1) * TILE_SIZE - currentHitboxH / 2 - 0.1;
-    if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
-      let bottomTileRow = floor((characterY + currentHitboxH / 2) / TILE_SIZE);
-      groundTopY = bottomTileRow * TILE_SIZE - currentHitboxH / 2 - 0.1;
-    }
-
-    if (characterY >= groundTopY) {
-      characterY = groundTopY;
-      velocityY = 0;
-      isOnGround = true;
-      flagDropY = maxFlagDrop;
-      gameState = "WALK_TO_CASTLE";
-    }
-
-  } else if (gameState === "WALK_TO_CASTLE") {
-    if (!hideCharacter) {
-      moveX = 3;
-      facingDirection = 1;
-      characterX += moveX;
-      if (characterX >= castleTargetX) {
-      characterX = castleTargetX;
-      hideCharacter = true; 
-      stateTimer = millis();
-      castleFlagRaised = true;
-      castleFlagProgress = 0;
-      let topCastleRow = 8;
-      for (let r = 0; r < levelMap.length; r++) {
-        if (levelMap[r].includes('C')) {
-          topCastleRow = r;
-          break;
-        }
-      }
-      castleRoofTopY = topCastleRow * TILE_SIZE;
-      // <--- 新增：2-4 過關抵達城堡時，頭燈與剩余火把化為白煙消散
-      if (currentWorld === 2 && currentLevel === 4 && (hasMinerHeadlamp || torchCount > 0)) {
-        for (let s = 0; s < 14; s++) {
-          endClearBonusSmoke.push({
-            x: characterX + random(-18, 18),
-            y: characterY + random(-25, 10),
-            vx: random(-1.5, 1.5),
-            vy: random(-2.5, -0.8),
-            r: random(10, 22),
-            alpha: 240
-          });
-        }
-        hasMinerHeadlamp = false;
-        torchCount = 0;
-        placedTorches = [];
-        playSFX("powerup");
-        floatingTexts.push({ text: "礦坑裝備已歸還！", x: characterX - 60, y: characterY - 55, vy: -1.2, life: 80 });
-      }
-    }
-    } else {
-      if (millis() - stateTimer > 1500) {
-        let curId = `${currentWorld}-${currentLevel}`;
-        let node = mapNodesData[curId];
-        if (node) {
-          node.cleared = true;
-          // 判斷是否為秘密終點過關（後續關卡會設定 isSecretClear = true）
-          let unlockList = (typeof isSecretClear !== "undefined" && isSecretClear && node.nextSecret)
-            ? node.nextSecret
-            : (node.nextNormal || []);
-
-          for (let nextId of unlockList) {
-            if (mapNodesData[nextId]) {
-              mapNodesData[nextId].unlocked = true;
-            }
-          }
-        }
-
-        // 通過任意關卡後，沙漠補給屋重新開門營業！
-        if (mapNodesData["2-SHOP"]) {
-          mapNodesData["2-SHOP"].isOpen = true;
-        }
-
-        if (curId === "1-4") {
-          // 回到 World 1 大地圖並播放 1-4 城堡白旗 → 聚光燈轉場動畫
-          currentWorld = 1;
-          selectedMapNode = "1-4";
-          worldTransition = {
-            active: true,
-            phase: "WHITE_FLAG",
-            timer: millis(),
-            flagProgress: 0,
-            roadProgress: 0,
-            spotlightR: max(width, height)
-          };
-          gameState = "WORLD_MAP";
-        } else if (curId === "2-5") {
-          gameState = "ALL_CLEAR";
-        } else {
-          // 自動將游標移到剛解鎖的下一關
-          let nextTargets = (typeof isSecretClear !== "undefined" && isSecretClear && node && node.nextSecret)
-            ? node.nextSecret
-            : (node && node.nextNormal ? node.nextNormal : []);
-          if (nextTargets.length > 0 && mapNodesData[nextTargets[0]]) {
-            selectedMapNode = nextTargets[0];
-          }
-          gameState = "WORLD_MAP";
-        }
-      }
-    }
-
-  } else if (gameState === "ENTERING_PIPE") {
-  moveX = 2.0;
-  facingDirection = 1;
-  characterX += moveX;
-  if (millis() - stateTimer > 650) {
-    hideCharacter = true;
-  }
-  if (millis() - stateTimer > 1100) {
-    // 切換到 MAP_1_2
-    is1_2Intro = false;
-    loadLevelMap(MAP_1_2);
-    spawnLevelEnemies(2);
-
-    // 在 1-2 地下場景左側地面上放一根「地下入口水管」，讓主角從管口鑽出來
-    let pipeCol = 2;
-    let groundRow = 13;
-    for (let r = levelMap.length - 1; r >= 0; r--) {
-      if (levelMap[r][pipeCol] === 'G' || levelMap[r][pipeCol] === 'B') {
-        groundRow = r;
-        break;
-      }
-    }
-    if (groundRow >= 3) {
-      levelMap[groundRow - 1][pipeCol] = 'P';
-      levelMap[groundRow - 2][pipeCol] = 'P';
-    }
-
-    cameraX = 0;
-    characterX = pipeCol * TILE_SIZE + TILE_SIZE / 2;
-    characterY = (groundRow - 1) * TILE_SIZE + 12;
-    velocityY = 0;
-    hideCharacter = false;
-    castleFlagRaised = false;
-    castleFlagProgress = 0;
-    stateTimer = millis();
-    isExitingPipe = true;
-    gameState = "PLAYING";
-  }
-} else if (gameState === "ENTERING_SUPPLY_PIPE") {
-    moveX = 0;
-    characterY += 1.8;
-    if (millis() - stateTimer > 550) {
-      let spawnCopy = initialW2L4Spawns;
-      if (!spawnCopy) {
-        let fallbackData = buildWorld2Level(4);
-        spawnCopy = {
-          enemySpawns: (fallbackData.enemySpawns || []).map(sp => ({ ...sp })),
-          platformSpawns: (fallbackData.platformSpawns || []).map(pl => ({ ...pl }))
-        };
-        initialW2L4Spawns = spawnCopy;
-      }
-      saved2_4MainState = {
-        mapStrings: levelMap.map(r => r.join('')),
-        enemySpawns: spawnCopy.enemySpawns.map(sp => ({ ...sp })),
-        platformSpawns: spawnCopy.platformSpawns.map(pl => ({ ...pl }))
-      };
-      window.isInMinerSupplyRoom = true;
-      let roomData = buildWorld2MinerSupplyRoom();
-      loadLevelMap(roomData.mapStrings);
-      movingPlatforms = [];
-      enemies = [];
-      if (!hasMinerHeadlamp) {
-        minerLampPickup = { x: 12.5 * TILE_SIZE + 20, y: 12 * TILE_SIZE + 12, taken: false };
-      }
-      characterX = 2.5 * TILE_SIZE;
-      characterY = 2.2 * TILE_SIZE;
-      velocityY = 0;
-      cameraX = 0;
-      isExitingCeilingPipe = true;
-      playSFX("shrink");
-      gameState = "PLAYING";
-      floatingTexts.push({ text: "礦工裝備補給站（全亮區域）", x: characterX, y: 4.5 * TILE_SIZE, vy: -1, life: 95, isOneUp: true });
-    }
-  } else if (gameState === "EXITING_SUPPLY_PIPE") {
-    moveX = 0;
-    characterY += 1.8;
-    if (millis() - stateTimer > 550) {
-      window.isInMinerSupplyRoom = false;
-      let usedFallback = false;
-      let targetState = saved2_4MainState;
-      if (!targetState || !Array.isArray(targetState.mapStrings) || targetState.mapStrings.length === 0) {
-        usedFallback = true;
-        let fallbackData = buildWorld2Level(4);
-        targetState = {
-          mapStrings: fallbackData.mapStrings,
-          enemySpawns: initialW2L4Spawns ? initialW2L4Spawns.enemySpawns : (fallbackData.enemySpawns || []),
-          platformSpawns: initialW2L4Spawns ? initialW2L4Spawns.platformSpawns : (fallbackData.platformSpawns || [])
-        };
-      }
-      loadLevelMap(targetState.mapStrings);
-      movingPlatforms = (targetState.platformSpawns || []).map(pl => ({ ...pl }));
-      enemies = [];
-      for (let sp of (targetState.enemySpawns || [])) {
-        let h = sp.type === "goomba" ? 30 : 38;
-        enemies.push({
-          type: sp.type,
-          x: sp.col * TILE_SIZE + 20,
-          y: sp.row * TILE_SIZE - h / 2 - 12,
-          baseY: sp.row * TILE_SIZE - h / 2 - 24,
-          w: 30, h: h, vx: -1.4, vy: 0,
-          shellMoving: false, dead: false, flyPhase: random(TWO_PI),
-          stunTimer: 0, knockbackX: 0
-        });
-      }
-      characterX = 3 * TILE_SIZE;
-      characterY = 12 * TILE_SIZE - currentHitboxH / 2 - 2;
-      velocityY = 0;
-      cameraX = 0;
-      gameState = "PLAYING";
-      if (usedFallback) {
-        floatingTexts.push({ text: "地圖資料異常，已返回入口", x: characterX - 40, y: characterY - 35, vy: -1, life: 95, isOneUp: true });
-      } else {
-        floatingTexts.push({ text: "進入幽暗古礦坑！按 [E] 插火把", x: characterX - 40, y: characterY - 35, vy: -1, life: 95, isOneUp: true });
-      }
-    }
-  } else if (gameState === "ENTERING_QUICKSAND") {
-    let elapsed = millis() - stateTimer;
-    moveX = 0;
-    velocityY = 0;
-    characterY += 1.2;
-
-    if (elapsed > 550) {
-      is2_1SubSecret = true;
-      let subData = buildWorld2SubSecretMap();
-      loadLevelMap(subData.mapStrings);
-      enemies = [];
-      for (let sp of subData.enemySpawns) {
-        let h = sp.type === "goomba" ? 30 : 38;
-        enemies.push({
-          type: sp.type, x: sp.col * TILE_SIZE + 20, y: sp.row * TILE_SIZE - h / 2 - 12,
-          baseY: sp.row * TILE_SIZE - h / 2 - 24, w: 30, h: h, vx: -1.4, vy: 0,
-          shellMoving: false, dead: false, flyPhase: random(TWO_PI), stunTimer: 0, knockbackX: 0
-        });
-      }
-      characterX = 3 * TILE_SIZE;
-      characterY = 4 * TILE_SIZE;
-      velocityY = 0;
-      cameraX = 0;
-      quicksandFadeInTimer = millis();
-      gameState = "PLAYING";
-      floatingTexts.push({ text: "被流沙吸入地下秘室！尋找紅色終點旗！", x: characterX, y: characterY - 30, vy: -1, life: 110, isOneUp: true });
-    }
-  }
-if (isExitingPipe) {
-  moveX = 0;
-  velocityY = 0;
-  characterY -= 1.5;
-  let pipeCol = floor(characterX / TILE_SIZE);
-  let pipeTopRow = 11;
-  for (let r = 0; r < levelMap.length; r++) {
-    if (levelMap[r][pipeCol] === 'P') {
-      pipeTopRow = r;
-      break;
-    }
-  }
-  let targetStandY = pipeTopRow * TILE_SIZE - currentHitboxH / 2 - 0.5;
-  if (characterY <= targetStandY) {
-    characterY = targetStandY;
-    isExitingPipe = false;
-  }
-}
-// --- 2. 物理系統與碰撞偵測 ---
-  if (isExitingCeilingPipe) {
-    moveX = 0;
-    velocityY = 0;
-    characterY += 1.4; // 慢慢從天花板水管往下鑽出
-
-    // 自動偵測天花板水管最底端管口的 Y 座標
-    let pipeCol = floor(characterX / TILE_SIZE);
-    let mouthBottomY = 4 * TILE_SIZE;
-    for (let r = 2; r < levelMap.length; r++) {
-      let t = levelMap[r][pipeCol];
-      if (t === 'P' || t === 'p' || t === 'u') {
-        mouthBottomY = (r + 1) * TILE_SIZE;
-      } else {
-        break;
-      }
-    }
-
-    // 等到主角頭頂完全離開管口下方，就解除動畫並自然落下
-    let headTopY = characterY - currentHitboxH / 2;
-    if (headTopY >= mouthBottomY + 2) {
-      isExitingCeilingPipe = false;
-      velocityY = 1.5;
-    }
-  }
-
-  platformCarryDX = 0;
-
-  if (!isExitingPipe && !isExitingCeilingPipe && ((gameState === "PLAYING" && !showSettingsModal) || gameState === "WALK_TO_CASTLE")) {
-    if (isGliding && velocityY > 0) {
-      velocityY += gravity * 0.2; 
-      if (velocityY > 2) velocityY = 2; 
-    } else {
-      velocityY += gravity;    
-    }
-    
-    let prevFeetY = characterY + currentHitboxH / 2;
-    characterY += velocityY; 
-    isOnGround = false; 
-    
-    if (velocityY < 0) {
-      let headY = characterY - currentHitboxH / 2;
-      let hitHiddenLeft  = checkHiddenBlockHit(characterX - currentHitboxW * 0.25, headY);
-      let hitHiddenRight = checkHiddenBlockHit(characterX + currentHitboxW * 0.25, headY);
-      if (hitHiddenLeft || hitHiddenRight) {
-        let topTileRow = floor(headY / TILE_SIZE);
-        characterY = (topTileRow + 1) * TILE_SIZE + currentHitboxH / 2 + 0.1;
-        velocityY = 0;
-      }
-    }
-
-   if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
-      if (velocityY > 0) { 
-        let bottomTileRow = floor((characterY + currentHitboxH / 2) / TILE_SIZE);
-        characterY = bottomTileRow * TILE_SIZE - currentHitboxH / 2 - 0.1; 
-        velocityY = 0; 
-        isOnGround = true; 
-        isGliding = false; 
-        isActionLocked = false; 
-        isShortJump = false; 
-        featherFlapsLeft = 2;
-
-        // 每 10 幀紀錄一次地面安全座標供時光回溯使用
-        if (gameState === "PLAYING" && frameCount % 10 === 0) {
-          safePositionHistory.push({ x: characterX, y: characterY });
-          if (safePositionHistory.length > 12) safePositionHistory.shift();
-        }
-      } else if (velocityY < 0) { 
-        let topTileRow = floor((characterY - currentHitboxH / 2) / TILE_SIZE);
-        characterY = (topTileRow + 1) * TILE_SIZE + currentHitboxH / 2 + 0.1; 
-        velocityY = 0; 
-        
-        checkHitTile(characterX - currentHitboxW * 0.48, characterY - currentHitboxH / 2 - 4);
-        checkHitTile(characterX, characterY - currentHitboxH / 2 - 4);
-        checkHitTile(characterX + currentHitboxW * 0.48, characterY - currentHitboxH / 2 - 4);
-      }
-    }
-
-    syncOneWayPlatformsFromMap();
-
-    if (velocityY >= 0 && !isOnGround) {
-      let newFeetY = characterY + currentHitboxH / 2;
-      for (let mp of movingPlatforms) {
-        if (characterX + currentHitboxW / 2 > mp.x && characterX - currentHitboxW / 2 < mp.x + mp.w) {
-          if (prevFeetY <= mp.y + 8 && newFeetY >= mp.y) {
-            characterY = mp.y - currentHitboxH / 2 - 0.1;
-            velocityY = 0;
-            isOnGround = true;
-            isGliding = false;
-            isActionLocked = false;
-            isShortJump = false;
-            featherFlapsLeft = 2;
-            platformCarryDX = mp.dx;
-            break;
-          }
-        }
-      }
-    }
-
-    if (velocityY >= 0 && !isOnGround) {
-      let newFeetY = characterY + currentHitboxH / 2;
-      for (let owp of oneWayPlatforms) {
-        if (characterX + currentHitboxW / 2 > owp.x && characterX - currentHitboxW / 2 < owp.x + owp.w) {
-          if (prevFeetY <= owp.y + 8 && newFeetY >= owp.y) {
-            characterY = owp.y - currentHitboxH / 2 - 0.1;
-            velocityY = 0;
-            isOnGround = true;
-            isGliding = false;
-            isActionLocked = false;
-            isShortJump = false;
-            featherFlapsLeft = 2;
-            break;
-          }
-        }
-      }
-    }
-    // World 2 流沙 ('Q') 與仙人掌刺柱 ('K') 互動
-    if (currentWorld === 2 && gameState === "PLAYING") {
-      let pCol = floor(characterX / TILE_SIZE);
-      let footRow = floor((characterY + currentHitboxH / 2 - 4) / TILE_SIZE);
-      let bodyRow = floor(characterY / TILE_SIZE);
-
-      if (footRow >= 0 && footRow < levelMap.length && pCol >= 0 && pCol < levelMap[0].length) {
-       if (levelMap[footRow][pCol] === 'V' && !is2_1SubSecret) {
-  // 跟一般流沙一樣慢慢往下沉（按跳還可以逃出來）
-  if (velocityY > 0.5) velocityY = 0.5;
-  isOnGround = true;
-  isActionLocked = false;
-
-  // 只有整個人沉到流沙格子最底部（第 14 排底部）時，啟動平滑轉場進入地下密室
-  let bottomOfSandY = (footRow + 1) * TILE_SIZE;
-  if (characterY + currentHitboxH / 2 >= bottomOfSandY - 2 && gameState === "PLAYING") {
-    gameState = "ENTERING_QUICKSAND";
-    stateTimer = millis();
-    quicksandExitMode = false;
-    playSFX("shrink");
-  }
-}
-        if (levelMap[footRow][pCol] === 'Q') {
-          if (powerLevel === 3 && powerType === "chrono") {
-            if (velocityY > 0) {
-              velocityY = 0;
-              characterY = footRow * TILE_SIZE - currentHitboxH / 2;
-              isOnGround = true;
-            }
-          } else {
-            // 減慢下沉速度，給玩家充足反應時間
-            if (velocityY > 0.42) velocityY = 0.42;
-            isOnGround = true;
-            isActionLocked = false;
-
-            // 偵測玩家按跳躍鍵：每按一次就把雙腳往上拔一截並給予脫困向上衝量
-            if (keyIsDown(UP_ARROW) || keyIsDown(87) || keyIsDown(32)) {
-              characterY -= 12;
-              velocityY = -10.5;
-              isOnGround = false;
-              playSFX("jump");
-            } else if (frameCount % 22 === 0) {
-              floatingTexts.push({ text: "流沙！連跳脫困", x: characterX - 35, y: characterY - 35, vy: -0.8, life: 25 });
-            }
-          }
-        }
-      }
-
-      if (bodyRow >= 0 && bodyRow < levelMap.length && pCol >= 0 && pCol < levelMap[0].length) {
-        if (levelMap[bodyRow][pCol] === 'K') {
-          if (starTimer > 0 || (powerLevel === 3 && powerType === "cactus" && isCrouching)) {
-            levelMap[bodyRow][pCol] = ' ';
-            spawnBrickParticles(pCol * TILE_SIZE + 20, bodyRow * TILE_SIZE + 20);
-            playSFX("brick");
-            score += 200;
-          } else {
-            takeDamage();
-            return;
-          }
-        }
-      }
-    }
-    if (gameState === "PLAYING" && checkLavaHazard(characterX, characterY, currentHitboxW, currentHitboxH)) {
-      handlePlayerDeath();
-      return;
-    }
-  }
-
-  if (gameState === "PLAYING") {
-    checkFlagpole(characterX, characterY, currentHitboxW, currentHitboxH);
-  }
-
-  if (characterY > levelMap.length * TILE_SIZE + 80) {
-    handlePlayerDeath(true);
-    if (gameState === "DYING_ANIMATION") drawDeathAnimation();
-    return;
-  }
   // --- 3. 判斷動畫狀態 ---
   const isJumping = !isOnGround; 
   
   if (gameState === "FLAG_SLIDE") {
+    animationState = "falling";
+  } else if (isWallSliding) {
     animationState = "falling";
   } else if (gameState === "WALK_TO_CASTLE" || gameState === "ENTERING_PIPE") {
     animationState = "walk";
@@ -1298,6 +1521,7 @@ if (isExitingPipe) {
   }
   updateAndDrawCoins(); 
   updateAndDrawBrickParticles();
+  updateAndDrawWallSlideParticles();
 
   let isInvincibleHidden = (invincibleTimer > 0 && floor(invincibleTimer / 100) % 2 === 1);
   if (!hideCharacter && !isInvincibleHidden) {
@@ -1305,6 +1529,28 @@ if (isExitingPipe) {
     let frameBottomPad = metric.frameBottomPaddings[currentFrame] || 0;
     let realFeetOffsetFromCanvasBottom = frameBottomPad * displayScale;
     let drawCenterY = hitboxBottomY - (frameHeight * displayScale) / 2 + realFeetOffsetFromCanvasBottom;
+
+    // 進出水管時啟用 Canvas 管口裁切遮罩（身體跨過管口線即裁切隱藏，徹底零穿模）
+    let usePipeClip = (
+      pipeClipDir !== "NONE" &&
+      (gameState === "ENTERING_PIPE" ||
+       gameState === "ENTERING_SUPPLY_PIPE" ||
+       gameState === "EXITING_SUPPLY_PIPE" ||
+       isExitingPipe ||
+       isExitingCeilingPipe)
+    );
+    if (usePipeClip) {
+      drawingContext.save();
+      drawingContext.beginPath();
+      if (pipeClipDir === "LEFT_OF_X") {
+        drawingContext.rect(cameraX - 200, -500, (pipeMouthX - (cameraX - 200)), levelMap.length * TILE_SIZE + 1000);
+      } else if (pipeClipDir === "ABOVE_Y") {
+        drawingContext.rect(cameraX - 200, -500, viewWorldW + 400, pipeMouthY + 500);
+      } else if (pipeClipDir === "BELOW_Y") {
+        drawingContext.rect(cameraX - 200, pipeMouthY, viewWorldW + 400, levelMap.length * TILE_SIZE + 500);
+      }
+      drawingContext.clip();
+    }
 
     if (currentSprintBonus > 0.45 && moveX !== 0) {
       push();
@@ -1315,10 +1561,7 @@ if (isExitingPipe) {
       noTint();
       pop();
     }
-    // 當主角正在進出水管過場時，補畫一次地圖圖層在主角前方，讓綠色水管自然遮住主角身體
-  if (gameState === "PIPE_ENTER" || gameState === "PIPE_EXIT") {
-    drawMap(viewWorldW);
-  }
+
     if (powerLevel === 3 && powerType === "cactus" && isCrouching) {
       push();
       translate(characterX, characterY);
@@ -1390,6 +1633,10 @@ if (isExitingPipe) {
       pop(); 
     }
 
+    if (usePipeClip) {
+      drawingContext.restore();
+    }
+
     // 主角自暈 3 秒期間：頭頂畫出 3 顆旋轉金星
     if (playerStunTimer > 0) {
       push();
@@ -1406,7 +1653,7 @@ if (isExitingPipe) {
 
   if (gameState === "ENTERING_PIPE" || isExitingPipe || isExitingCeilingPipe || gameState === "ENTERING_SUPPLY_PIPE" || gameState === "EXITING_SUPPLY_PIPE") {
     drawPipesOnly();
-}
+  }
 
   for (let i = activeEffects.length - 1; i >= 0; i--) {
     let ef = activeEffects[i];
