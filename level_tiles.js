@@ -555,6 +555,14 @@ function drawMap(viewWorldW = width) {
             rect(px + 2, py + 12, 4, 18);
           }
         }
+        } else if (tile === '=') {
+          noStroke();
+          fill("#6C584C");
+          rect(tileX, tileY + 4, TILE_SIZE, 14, 3);
+          fill("#DDB892");
+          rect(tileX, tileY, TILE_SIZE, 7, 3);
+          fill("#EDE0D4");
+          rect(tileX + 4, tileY + 1, TILE_SIZE - 8, 2, 1);
         } else if (tile === 'S') {
           image(textures["STAIR"], tileX, tileY);
         } else if (tile === 'F') {
