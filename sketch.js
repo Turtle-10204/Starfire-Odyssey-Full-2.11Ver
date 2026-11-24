@@ -43,8 +43,8 @@ function setup() {
 
 function drawDeathAnimation() {
   let elapsed = millis() - deathAnimTimer;
-  // 階段時長（總計 1650ms）
-  const STAGE1_MS = 600; // 12 幀播 1 次 momi_dead.png
+  // 深淵墜落是在畫面外死亡，直接跳過階段 1（不畫坑口倒地精靈圖），直接進行聚光燈縮光圈
+  const STAGE1_MS = deathIsPitFall ? 0 : 600; // 一般死亡播 12 幀 momi_dead.png
   const STAGE3_MS = 650; // 透明圓形聚光燈定格停留
   const STAGE4_MS = 180; // 透明圓形先向外微撐大 1.2 倍（蓄力）
   const STAGE5_MS = 220; // 透明圓形俐落縮小到 0
@@ -91,7 +91,7 @@ function drawDeathAnimation() {
 
   push();
   scale(z);
-  translate(-cameraX, mapOffsetY);
+  translate(-deathAnimCameraX, mapOffsetY);
 
   drawWorld2AtmosphereAndLandmarks();
   drawMap(viewWorldW);
@@ -105,32 +105,34 @@ function drawDeathAnimation() {
     drawSandwormBoss();
   }
 
-  // 繪製角色死亡精靈圖（階段 1 播完 12 幀後定格於第 12 幀）
-  let deadFrameIdx = constrain(floor((elapsed / STAGE1_MS) * DEAD_FRAME_COUNT), 0, DEAD_FRAME_COUNT - 1);
-  let targetH = (powerLevel >= 2) ? 80 : 53;
+  // 只有非深淵墜落死亡（如撞怪、岩漿、時間到）才在原地畫角色死亡精靈圖
+  if (!deathIsPitFall) {
+    let deadFrameIdx = constrain(floor((elapsed / STAGE1_MS) * DEAD_FRAME_COUNT), 0, DEAD_FRAME_COUNT - 1);
+    let targetH = (powerLevel >= 2) ? 80 : 53;
 
-  if (deadSpriteSheet && deadSpriteSheet.width > 0) {
-    let fw = deadSpriteSheet.width / DEAD_FRAME_COUNT;
-    let fh = deadSpriteSheet.height;
-    let metric = spriteMetrics["dead"] || { contentHeight: fh, frameBottomPaddings: [] };
-    let contentH = (metric.contentHeight > 0) ? metric.contentHeight : fh;
-    let dispScale = targetH / contentH;
-    let hitboxBottomY = deathAnimY + prevHitboxH / 2;
-    let bottomPad = (metric.frameBottomPaddings && metric.frameBottomPaddings[deadFrameIdx]) || 0;
-    let drawCenterY = hitboxBottomY - (fh * dispScale) / 2 + bottomPad * dispScale;
+    if (deadSpriteSheet && deadSpriteSheet.width > 0) {
+      let fw = deadSpriteSheet.width / DEAD_FRAME_COUNT;
+      let fh = deadSpriteSheet.height;
+      let metric = spriteMetrics["dead"] || { contentHeight: fh, frameBottomPaddings: [] };
+      let contentH = (metric.contentHeight > 0) ? metric.contentHeight : fh;
+      let dispScale = targetH / contentH;
+      let hitboxBottomY = deathAnimY + prevHitboxH / 2;
+      let bottomPad = (metric.frameBottomPaddings && metric.frameBottomPaddings[deadFrameIdx]) || 0;
+      let drawCenterY = hitboxBottomY - (fh * dispScale) / 2 + bottomPad * dispScale;
 
-    push();
-    translate(deathAnimX, drawCenterY);
-    scale(facingDirection * dispScale, dispScale);
-    image(deadSpriteSheet, 0, 0, fw, fh, deadFrameIdx * fw, 0, fw, fh);
-    pop();
-  } else {
-    push();
-    translate(deathAnimX, deathAnimY);
-    noStroke();
-    fill("#E63946");
-    ellipse(0, 0, 32, targetH);
-    pop();
+      push();
+      translate(deathAnimX, drawCenterY);
+      scale(facingDirection * dispScale, dispScale);
+      image(deadSpriteSheet, 0, 0, fw, fh, deadFrameIdx * fw, 0, fw, fh);
+      pop();
+    } else {
+      push();
+      translate(deathAnimX, deathAnimY);
+      noStroke();
+      fill("#E63946");
+      ellipse(0, 0, 32, targetH);
+      pop();
+    }
   }
 
   pop();
@@ -138,16 +140,15 @@ function drawDeathAnimation() {
   // HUD 畫在聚光燈黑幕下方
   drawNSMBHUD();
 
-  // 2. 階段 2～5：全螢幕純黑遮罩中間挖出「透明圓形洞」（聚光燈縮光圈）
-  if (deathAnimStage >= 2) {
-    let screenX = (deathAnimX - cameraX) * z;
+  // 2. 階段 3～5：全螢幕純黑遮罩中間挖出「透明圓形洞」（聚光燈縮光圈）
+  if (deathAnimStage >= 3) {
+    let screenX = (deathAnimX - deathAnimCameraX) * z;
     let screenY = (deathAnimY + mapOffsetY) * z;
     let baseHoleR = max(56, ((powerLevel >= 2 ? 80 : 53) * 0.85) * z);
     let maxScreenR = dist(screenX, screenY, width / 2, height / 2) + Math.hypot(width, height) * 0.5;
     let holeR = baseHoleR;
 
     if (deathAnimStage === 3) {
-      // 前 110ms 由全螢幕快速收攏到聚光燈圓洞，消除瞬間黑屏硬切閃爍
       let introT = constrain((elapsed - STAGE1_MS) / 110, 0, 1);
       let easeOut = 1 - pow(1 - introT, 3);
       holeR = lerp(maxScreenR, baseHoleR, easeOut);
@@ -159,19 +160,21 @@ function drawDeathAnimation() {
       holeR = lerp(baseHoleR * 1.2, 0, t5);
     }
 
-    push();
-    resetMatrix();
-    let ctx = drawingContext;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, width, height);
-    if (holeR > 0.5) {
-      ctx.arc(screenX, screenY, holeR, 0, TWO_PI, true);
+    if (!isNaN(holeR)) {
+      push();
+      resetMatrix();
+      let ctx = drawingContext;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, width, height);
+      if (holeR > 1) {
+        ctx.arc(screenX, screenY, holeR, 0, TWO_PI, true);
+      }
+      ctx.fillStyle = "rgb(0, 0, 0)";
+      ctx.fill("evenodd");
+      ctx.restore();
+      pop();
     }
-    ctx.fillStyle = "rgb(0, 0, 0)";
-    ctx.fill("evenodd");
-    ctx.restore();
-    pop();
   }
 }
 
@@ -944,8 +947,9 @@ if (isExitingPipe) {
     checkFlagpole(characterX, characterY, currentHitboxW, currentHitboxH);
   }
 
-  if (characterY > levelMap.length * TILE_SIZE + 200) {
-    handlePlayerDeath();
+  if (characterY > levelMap.length * TILE_SIZE + 80) {
+    handlePlayerDeath(true);
+    if (gameState === "DYING_ANIMATION") drawDeathAnimation();
     return;
   }
   // --- 3. 判斷動畫狀態 ---
