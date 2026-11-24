@@ -1160,11 +1160,6 @@ function draw() {
     } else if (currentWorld === 1 && currentLevel === 4 && typeof drawBoss === "function") {
       drawBoss();
     }
-  if (currentWorld === 2 && currentLevel === 5 && typeof drawSandwormBoss === "function") {
-    drawSandwormBoss();
-  } else if (currentWorld === 1 && currentLevel === 4 && typeof drawBoss === "function") {
-    drawBoss();
-  }
     drawEnemies();
     if (currentLevel === 4) {
       drawFireBars();
