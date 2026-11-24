@@ -2,6 +2,8 @@
 // state.js — 核心遊戲狀態（主角物理、遊戲流程、道具與實體陣列、計時器）。各模組共用的全域變數集中於此。
 // =====================================================================
 
+let isEditingMobileControls = false;
+
 let characterX = 100;  
 
 let characterY = 100;  
