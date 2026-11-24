@@ -69,7 +69,7 @@ function updateMobileTouchState() {
       triggerJumpAction();
     }
     if (!nextState.jump && prevTouchJump) {
-      if (velocityY < 0 && powerType !== "feather") {
+      if (velocityY < 0 && powerType !== "feather" && wallJumpLockTimer <= 0) {
         velocityY = 0;
         isShortJump = true;
       }
@@ -122,6 +122,10 @@ function triggerJumpAction() {
 
     playSFX("jump");
   } else if (!isOnGround) {
+    // 優先判定無限蹬牆跳（抓牆中或 6 幀離牆寬容補償內）
+    if (typeof tryWallJump === "function" && tryWallJump()) {
+      return;
+    }
     if (powerType === "feather") {
       if (featherFlapsLeft > 0) {
         featherFlapsLeft--;
@@ -658,7 +662,7 @@ function keyPressed() {
 function keyReleased() {
   if (gameState === "DYING_ANIMATION") return;
   if ((keyCode === 32 || keyCode === 87) && gameState === "PLAYING") {
-    if (velocityY < 0 && powerType !== "feather") {
+    if (velocityY < 0 && powerType !== "feather" && wallJumpLockTimer <= 0) {
       velocityY = 0;      
       isShortJump = true; 
     }
