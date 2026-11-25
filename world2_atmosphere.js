@@ -3,7 +3,7 @@
 // =====================================================================
 
 // =====================================================================
-// World 2 (2-1 ~ 2-4) 零文字視覺連貫場景：光影色溫漸變 ＋ 起點來路地標
+// World 2 (2-1 ~ 2-5) 零文字視覺連貫場景：光影色溫漸變 ＋ 起點來路地標
 // =====================================================================
 function drawWorld2AtmosphereAndLandmarks() {
   if (currentWorld !== 2) return;
@@ -13,11 +13,83 @@ function drawWorld2AtmosphereAndLandmarks() {
 
   // --- 1. 遠景層（依關卡逐漸變深，呈現從地表走進地底的過程） ---
   if (currentLevel === 1) {
-    // 2-1：烈日沙漠遠景金字塔
-    fill("#E76F51");
-    triangle(cameraX * 0.7 + 320, 420, cameraX * 0.7 + 460, 210, cameraX * 0.7 + 600, 420);
-    fill("#FFF3B0");
-    circle(cameraX + width * 0.78, 95, 76);
+    // 2-1 戶外主關卡三層背景（僅在非地下秘室時繪製）
+    if (!(typeof is2_1SubSecret !== "undefined" && is2_1SubSecret)) {
+      // 1-A 遠景層：烈日與連綿沙漠沙丘剪影（視差 0.25）
+      fill("#FFF3B0");
+      circle(cameraX + width * 0.78, 95, 78);
+      fill(255, 243, 176, 45);
+      circle(cameraX + width * 0.78, 95, 118);
+
+      fill(232, 148, 76, 135);
+      for (let d = -1; d < 12; d++) {
+        let dx = d * 420 + cameraX * 0.75;
+        arc(dx + 210, 520, 520, 260, PI, TWO_PI);
+      }
+
+      // 1-B 遠景地標層：大小雙金字塔群（視差 0.35）
+      fill("#E76F51");
+      triangle(cameraX * 0.65 + 320, 520, cameraX * 0.65 + 470, 210, cameraX * 0.65 + 620, 520);
+      fill("#D65A3C");
+      triangle(cameraX * 0.65 + 470, 210, cameraX * 0.65 + 620, 520, cameraX * 0.65 + 545, 520);
+
+      fill("#EE8959");
+      triangle(cameraX * 0.65 + 1450, 520, cameraX * 0.65 + 1570, 265, cameraX * 0.65 + 1690, 520);
+      triangle(cameraX * 0.65 + 2750, 520, cameraX * 0.65 + 2910, 200, cameraX * 0.65 + 3070, 520);
+
+      // 1-C 中景綠洲棕櫚樹剪影（固定高低錯落偏移＋綠洲沙丘底座與草叢，純視覺裝飾無碰撞）
+      const oasisPalmCols = [15, 25, 118, 126];
+      const treeHeightOffsets = [0, 25, 10, -15];
+      for (let i = 0; i < oasisPalmCols.length; i++) {
+        let pc = oasisPalmCols[i];
+        let px = pc * 40 + 20;
+        let baseY = 520;
+        let hOffset = treeHeightOffsets[i % treeHeightOffsets.length];
+        let trunkTopY = baseY - (125 + hOffset);
+
+        // 樹幹（從底座土壤延伸至樹冠頂端）
+        fill("#8D5524");
+        quad(px - 6, baseY, px + 6, baseY, px + 3, trunkTopY, px - 3, trunkTopY);
+
+        // 樹冠棕櫚葉（隨 trunkTopY 同步高低錯落）
+        fill("#2A9D8F");
+        ellipse(px - 26, trunkTopY, 54, 16);
+        ellipse(px + 26, trunkTopY, 54, 16);
+        ellipse(px - 18, trunkTopY - 13, 44, 15);
+        ellipse(px + 18, trunkTopY - 13, 44, 15);
+
+        // 樹木底座與地面融合（雙層沙丘土堆＋綠洲草叢點綴）
+        fill("#B08968");
+        arc(px, baseY, 46, 20, PI, TWO_PI);
+        fill("#E6CCB2");
+        arc(px - 4, baseY, 32, 13, PI, TWO_PI);
+        fill("#2A9D8F");
+        triangle(px - 14, baseY, px - 10, baseY - 9, px - 6, baseY);
+        triangle(px + 7, baseY, px + 11, baseY - 10, px + 15, baseY);
+        fill("#52B788");
+        triangle(px - 8, baseY, px - 5, baseY - 7, px - 2, baseY);
+        triangle(px + 2, baseY, px + 5, baseY - 8, px + 8, baseY);
+      }
+
+      // 1-D 中景顯性秘室入口提示（col 217~219 特殊流沙後方半埋古代雙柱石門＋發光符文 — 維持現狀）
+      let gateLeftX = 216 * 40 + 6;
+      let gateRightX = 220 * 40 + 6;
+      let gateTopY = 350;
+      let gateBotY = 520;
+      // 古代石門雙柱與門楣（位於地形後方，絕不遮擋 V 入口或金幣）
+      fill("#6C584C");
+      rect(gateLeftX, gateTopY, 28, gateBotY - gateTopY, 3);
+      rect(gateRightX, gateTopY, 28, gateBotY - gateTopY, 3);
+      fill("#8A7365");
+      rect(gateLeftX - 8, gateTopY - 18, (gateRightX + 36) - (gateLeftX - 8), 22, 4);
+      // 門柱上的發光綠洲青藍符文（提醒玩家此處流沙為古代秘室入口）
+      let runePulse = 140 + sin(frameCount * 0.08) * 65;
+      fill(64, 224, 208, runePulse);
+      rect(gateLeftX + 10, gateTopY + 26, 8, 22, 2);
+      rect(gateLeftX + 10, gateTopY + 62, 8, 22, 2);
+      rect(gateRightX + 10, gateTopY + 26, 8, 22, 2);
+      rect(gateRightX + 10, gateTopY + 62, 8, 22, 2);
+    }
   } else if (currentLevel === 2) {
     // 2-2：沙暴黃昏轉入地下邊緣（遠景半掩埋的遺跡石柱）
     fill(180, 120, 60, 85);
