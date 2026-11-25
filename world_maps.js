@@ -52,77 +52,125 @@ function buildWorld2Level(lvlNum) {
   setTile(8, 10, '?');
 
   // =================================================================
-  // 【2-1 黃沙綠洲】（245 格）：四幕綠洲遠征＋後段隱密特殊流沙
+  // 【2-1 黃沙綠洲】（245 格）：四幕綠洲探索＋高低雙線＋顯性秘室入口
   // =================================================================
   if (lvlNum === 1) {
-    // 第一幕（col 16 ~ 66）：綠洲水池與仙人掌高低道
+    // 明確清除共用起點預設的 row 8, col 8~10，避免 col 9 殘留多餘 M
+    fillRect(8, 8, 8, 10, ' ');
+    // 起點綠洲營地石台＋雙磚＋上方隱藏磚 I
+    fillRect(12, 8, 12, 10, 'S');
+    setTile(8, 8, '?');
+    setTile(8, 10, 'M');
+    setTile(5, 9, 'I');
+
+    // 第一幕（col 16 ~ 67）：綠洲水池、仙人掌策略林與雙層高空木橋
     fillRect(11, 16, 12, 18, 'S');
     digPit(19, 4, 'Q');
     fillRect(11, 23, 12, 25, 'S');
     addCoinArc(19, 8, 4);
 
-    fillRect(7, 29, 7, 40, 'B'); // 挑高磚橋，上下動線完全不卡頭
-    setTile(7, 34, 'M');
+    // 上層挑高磚橋 vs 下層可震碎仙人掌柱（後方藏金幣獎勵）
+    fillRect(7, 29, 7, 42, 'B');
+    setTile(7, 35, 'M');
     addCoinArc(31, 5, 5);
     setTile(12, 33, 'K');
     setTile(11, 33, 'K');
-    enemySpawns.push({ type: "goomba", col: 38, row: 12 });
+    setTile(12, 34, 'O');
+    setTile(12, 35, 'O');
+    setTile(12, 38, 'K');
+    setTile(11, 38, 'K');
+    setTile(12, 39, 'O');
+    setTile(12, 40, 'O');
+    enemySpawns.push({ type: "goomba", col: 41, row: 12 });
 
-    fillRect(10, 45, 12, 49, 'S');
-    fillRect(8,  52, 8,  59, 'T');
-    enemySpawns.push({ type: "koopa", col: 55, row: 8 });
-    enemySpawns.push({ type: "goomba", col: 62, row: 12 });
+    // 高空雙階路線（每階垂直落差 2 格，容錯充足）vs 地面路徑
+    fillRect(10, 44, 12, 46, 'S');
+    fillRect(8,  48, 8,  52, '=');
+    fillRect(6,  55, 6,  62, 'T');
+    addCoinArc(56, 4, 6);
+    setTile(12, 53, 'K');
+    enemySpawns.push({ type: "koopa", col: 58, row: 6 });
+    enemySpawns.push({ type: "goomba", col: 64, row: 12 });
 
-    // 第二幕（col 68 ~ 115）：古代砂岩大峽谷與移動浮板
-    digPit(69, 16, 'Q');
-    fillRect(10, 70, 12, 73, 'S');
+    // 第二幕（col 68 ~ 118）：古代砂岩大峽谷、雙水平浮板、安全中島與上層石梁
+    digPit(69, 22, 'Q'); // col 69 ~ 90 全段流沙退路
+    fillRect(10, 69, 12, 72, 'S'); // 左岸起跳台
     platformSpawns.push({
-      x: 75 * 40, y: 9 * 40, w: 120, h: 16,
-      minX: 74 * 40, maxX: 82 * 40, speed: 2.2, dx: 0
+      x: 74 * 40, y: 9 * 40, w: 120, h: 16,
+      minX: 73 * 40, maxX: 77 * 40, speed: 2.0, dx: 0
     });
-    fillRect(10, 85, 12, 89, 'S');
-    enemySpawns.push({ type: "parakoopa", col: 80, row: 6 });
+    // 中央安全石島（col 80 ~ 83，恢復實體地基並疊建砂岩島）
+    fillRect(13, 80, 14, 83, 'G');
+    fillRect(9,  80, 12, 83, 'S');
+    // 上層技巧單向石梁（row 6，與中島 row 9 落差 3 格 / 32px 餘裕）
+    fillRect(6, 78, 6, 85, '=');
+    for (let c = 79; c <= 84; c++) setTile(4, c, 'O');
+    enemySpawns.push({ type: "parakoopa", col: 81, row: 4 });
 
-    fillRect(7, 94, 7, 105, 'B');
-    setTile(7, 99, '?');
-    setTile(12, 97, 'K');
-    enemySpawns.push({ type: "koopa", col: 103, row: 12 });
-    addCoinArc(108, 9, 5);
+    platformSpawns.push({
+      x: 85 * 40, y: 8 * 40, w: 120, h: 16,
+      minX: 84 * 40, maxX: 88 * 40, speed: 2.1, dx: 0
+    });
+    fillRect(9, 91, 12, 95, 'S'); // 右岸安全落腳台
 
-    // --- col 122 為中繼存檔旗 ---
+    // 峽谷後段雙層遺跡橋
+    fillRect(7, 98, 7, 110, 'B');
+    setTile(7, 103, '?');
+    setTile(12, 101, 'K');
+    enemySpawns.push({ type: "koopa", col: 106, row: 12 });
+    addCoinArc(112, 9, 5);
 
-    // 第三幕（col 130 ~ 185）：雙座金字塔遺跡攀登與高空獎勵路線
-    fillRect(11, 131, 12, 133, 'S');
-    fillRect(9,  134, 12, 136, 'S');
-    fillRect(7,  137, 12, 139, 'S');
-    setTile(4, 138, '*'); // 第一座金字塔頂端無敵星
-    fillRect(9,  140, 12, 142, 'S');
-    fillRect(11, 143, 12, 145, 'S');
+    // --- col 122 為中繼存檔旗（保持不變） ---
 
-    digPit(147, 5, 'Q');
-    enemySpawns.push({ type: "parakoopa", col: 150, row: 6 });
+    // 第三幕（col 128 ~ 183）：外牆攀登＋中空神龕金字塔與高空木橋
+    fillRect(11, 131, 12, 134, 'S');
+    fillRect(9,  134, 12, 137, 'S');
+    fillRect(7,  137, 8,  141, 'S'); // 金字塔頂蓋
+    fillRect(9,  141, 12, 144, 'S');
+    fillRect(11, 144, 12, 147, 'S');
+    // 挖空金字塔內部神龕室（col 135~143, row 9~12）
+    fillRect(9, 135, 12, 143, ' ');
+    setTile(11, 135, 'K');
+    setTile(12, 135, 'K');
+    setTile(11, 143, 'K');
+    setTile(12, 143, 'K');
+    setTile(9,  139, 'M');
+    setTile(12, 137, 'O');
+    setTile(12, 138, 'O');
+    setTile(12, 140, 'O');
+    setTile(12, 141, 'O');
+    setTile(4,  139, '*'); // 外牆頂端無敵星
 
-    // 高空木橋捷徑 vs 地面巡邏隊
-    fillRect(6, 155, 6, 172, 'T');
-    addCoinArc(158, 4, 6);
-    setTile(6, 164, 'M');
-    setTile(12, 160, 'K');
-    setTile(11, 160, 'K');
-    enemySpawns.push({ type: "goomba", col: 166, row: 12 });
-    enemySpawns.push({ type: "koopa", col: 171, row: 12 });
+    digPit(149, 5, 'Q');
+    enemySpawns.push({ type: "parakoopa", col: 151, row: 6 });
 
-    // 第四幕（col 182 ~ 225）：綠洲沙丘衝刺＋終點前隱密特殊流沙彩蛋
-    fillRect(9, 182, 12, 186, 'S');
-    digPit(187, 5, 'Q');
-    fillRect(9, 192, 12, 196, 'S');
-    enemySpawns.push({ type: "parakoopa", col: 199, row: 6 });
+    // 高空木橋捷徑（加中繼單向平台方便登橋）vs 地面巡邏隊
+    fillRect(9, 154, 9, 156, '=');
+    fillRect(6, 158, 6, 175, 'T');
+    addCoinArc(160, 4, 6);
+    setTile(6, 166, 'M');
+    setTile(12, 162, 'K');
+    setTile(11, 162, 'K');
+    enemySpawns.push({ type: "goomba", col: 168, row: 12 });
+    enemySpawns.push({ type: "koopa", col: 173, row: 12 });
 
-    fillRect(7, 202, 7, 211, 'B');
-    setTile(7, 206, '?');
-    enemySpawns.push({ type: "koopa", col: 209, row: 12 });
+    // 第四幕（col 184 ~ 225）：綠洲沙丘衝刺＋顯性古代石門秘室入口
+    fillRect(10, 184, 12, 188, 'S');
+    digPit(189, 5, 'Q');
+    fillRect(10, 194, 12, 198, 'S');
+    enemySpawns.push({ type: "parakoopa", col: 200, row: 6 });
 
-    // 終點前最後段（col 217 ~ 219）：隱密的特殊流沙坑（外觀與一般流沙相同）
+    fillRect(7, 202, 7, 212, 'B');
+    setTile(7, 207, '?');
+    enemySpawns.push({ type: "koopa", col: 210, row: 12 });
+
+    // 終點前特殊流沙入口（col 217 ~ 219）：保留 V，兩側設遺跡石墩與垂直金幣引導線
+    fillRect(11, 216, 12, 216, 'S');
     digPit(217, 3, 'V');
+    fillRect(11, 220, 12, 220, 'S');
+    setTile(6,  218, 'O');
+    setTile(8,  218, 'O');
+    setTile(10, 218, 'O');
   }
 
   // =================================================================
@@ -429,11 +477,12 @@ function buildWorld2Level(lvlNum) {
 }
 
 // =====================================================================
-// 2-1 神秘流沙吸入口進入的「地下 20 秒秘室」（終點為紅色秘密終點旗 'H'）
+// 2-1 神秘流沙吸入口進入的「地下古代秘室」（15 列 × 135 格，終點為紅色秘密終點旗 'H'）
+// 四大分區：A.古代入口 → B.失落走廊 → C.祭壇暗道 → D.秘密出口
 // =====================================================================
 function buildWorld2SubSecretMap() {
   let rows = 15;
-  let cols = 72;
+  let cols = 135;
   let grid = Array.from({ length: rows }, () => Array(cols).fill(' '));
   let enemySpawns = [];
 
@@ -441,24 +490,103 @@ function buildWorld2SubSecretMap() {
   const fillRect = (r1, c1, r2, c2, ch) => {
     for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) setTile(r, c, ch);
   };
+  const digPit = (startCol, width, fillChar = ' ') => {
+    for (let c = startCol; c < startCol + width; c++) {
+      setTile(13, c, fillChar);
+      setTile(14, c, fillChar);
+    }
+  };
+  const addCoinArc = (startCol, peakRow, count = 5) => {
+    for (let i = 0; i < count; i++) {
+      let arch = Math.round(Math.sin((i / (count - 1)) * Math.PI) * 2);
+      setTile(peakRow - arch, startCol + i, 'O');
+    }
+  };
 
-  fillRect(0, 0, 0, cols - 1, 'B');
+  // 全長天然岩層天花板（row 0~1）＋基礎砂岩地板（row 13~14）＋左右封閉岩壁
+  fillRect(0, 0, 1, cols - 1, 'G');
   fillRect(13, 0, 14, cols - 1, 'G');
+  fillRect(2, 0, 12, 0, 'G');
+  fillRect(2, cols - 1, 12, cols - 1, 'G');
 
-  for (let c = 10; c <= 16; c++) setTile(9, c, 'O');
-  setTile(9, 13, 'M');
-  fillRect(11, 20, 12, 22, 'S');
-  fillRect(9, 25, 12, 27, 'S');
-  setTile(6, 26, '?');
-  enemySpawns.push({ type: "koopa", col: 32, row: 12 });
+  // =================================================================
+  // 分區 A：古代入口（col 1 ~ 24）
+  // 玩家進入於 col 3, row 4，落於安全砂岩起點，前方有半埋古代石門框與金幣前進引導
+  // =================================================================
+  fillRect(12, 2, 12, 6, 'S');     // 入口安全砂岩平台（接住從 col 3 落下的主角）
+  fillRect(2, 7, 5, 8, 'S');       // 半埋石門門楣上方石塊
+  fillRect(10, 7, 12, 8, 'S');     // 半埋石門門檻石墩（中間 row 6~9 保持淨空 4 格高，大小隻皆可順暢通過）
+  addCoinArc(11, 8, 5);            // 前進方向金幣弧線引導
+  setTile(8, 17, '?');             // 入口補給金幣磚
+  setTile(8, 19, 'M');             // 入口能力補給磚（確保無道具玩家也有資源）
+  fillRect(11, 22, 12, 24, 'S');   // 過渡砂岩階梯
 
-  fillRect(8, 36, 8, 44, 'B');
-  for (let c = 37; c <= 43; c++) setTile(6, c, 'O');
-  fillRect(11, 48, 12, 51, 'S');
+  // =================================================================
+  // 分區 B：失落走廊（col 25 ~ 63）
+  // 雙層走廊＋飛行龜互動（可跳過、踩踏或走上層木橋繞過，絕非必傷陷阱）
+  // =================================================================
+  fillRect(9, 27, 12, 30, 'S');    // 走廊前段石柱台
+  fillRect(7, 33, 7, 52, 'T');     // 上層遺跡木棧道（高空安全替代路線）
+  addCoinArc(35, 5, 6);            // 上層木棧道金幣弧線
+  setTile(7, 43, '?');             // 上層木棧道金幣磚
 
-  let flagCol = 58;
+  // 下層主走廊地面敵人與可震碎仙人掌（後方藏額外金幣）
+  enemySpawns.push({ type: "goomba", col: 36, row: 12 });
+  setTile(12, 41, 'K');            // 單格可跳過之矮仙人掌（無敵星或仙人掌能力可直接撞碎）
+  setTile(12, 42, 'O');
+  setTile(12, 43, 'O');
+
+  // 明確要求之飛行龜生成點（baseY = 4*40 - 19 - 24 = 117px，垂直巡邏 ±48px 範圍 y=69~165px，
+  // 玩家可走地面 row 12 底部輕鬆通過、跳起踩踏或從上層木橋跨越）
+  enemySpawns.push({ type: "parakoopa", col: 42, row: 4 });
+
+  fillRect(10, 55, 12, 58, 'S');   // 走廊後段落腳石台
+  enemySpawns.push({ type: "koopa", col: 61, row: 12 });
+
+  // =================================================================
+  // 分區 C：祭壇暗道（col 64 ~ 112）
+  // 主路線：分段流沙池（每段 4 格寬，連跳即可脫困）＋寬敞安全砂岩石島＋中央古代祭壇
+  // 技巧獎勵路線：上方單向石梁 '=' 連跳，通往高空無敵星與金幣寶庫
+  // =================================================================
+  // 第一段流沙暗道（col 66~69 為 4 格流沙，col 70~75 為 6 格寬敞安全砂岩石島）
+  digPit(66, 4, 'Q');
+  fillRect(11, 70, 12, 75, 'S');
+  setTile(8, 72, 'M');             // 主路線必經處提供能力補給磚
+
+  // 技巧高空路線入口（從 col 72 跳上 row 8 單向石梁 → row 6 技巧高台）
+  fillRect(8, 75, 8, 78, '=');
+  fillRect(6, 81, 6, 94, '=');
+  for (let c = 83; c <= 92; c++) setTile(4, c, 'O');
+  setTile(3, 88, '*');             // 高空技巧路線額外獎勵：無敵星（非必要通關資源）
+
+  // 第二段流沙暗道（col 76~79 為 4 格流沙，col 80~95 為中央古代祭壇大石台）
+  digPit(76, 4, 'Q');
+  fillRect(11, 80, 12, 95, 'S');   // 中央古代祭壇基座（16 格寬安全落腳與恢復區）
+  fillRect(9,  85, 10, 90, 'S');   // 祭壇中層台階
+  setTile(6, 87, '?');             // 祭壇上方聖火金幣磚
+  setTile(6, 88, 'M');             // 祭壇上方聖火能力磚
+  setTile(12, 82, 'O');
+  setTile(12, 93, 'O');
+  enemySpawns.push({ type: "goomba", col: 92, row: 11 });
+
+  // 第三段流沙暗道（col 96~99 為 4 格流沙，col 100~112 為出口前恢復區）
+  digPit(96, 4, 'Q');
+  fillRect(10, 100, 12, 104, 'S'); // 脫離流沙後的安全高台
+  setTile(12, 107, 'K');           // 暗道末段單格仙人掌（可輕鬆跳過，或以星／仙人掌能力清除）
+  addCoinArc(106, 8, 5);
+
+  // =================================================================
+  // 分區 D：秘密出口（col 113 ~ 134）
+  // col 122 設置紅色秘密終點旗 'H'，col 127~131 設置終點城堡 'C'
+  // 旗桿下方為 row 13 完整地面，且 H 到 C 之間完全平坦無任何阻擋
+  // =================================================================
+  for (let step = 0; step < 4; step++) {
+    fillRect(12 - step, 114 + step, 12, 117, 'S'); // 出口前 4 階砂岩助跑台
+  }
+
+  let flagCol = 122;
   for (let r = 3; r <= 12; r++) setTile(r, flagCol, 'H');
-  fillRect(8, flagCol + 5, 12, flagCol + 9, 'C');
+  fillRect(8, flagCol + 5, 12, flagCol + 9, 'C'); // col 127 ~ 131 城堡（共 5 格寬，中心門在 col 129）
 
   return {
     mapStrings: grid.map(row => row.join('')),
