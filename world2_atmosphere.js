@@ -89,6 +89,115 @@ function drawWorld2AtmosphereAndLandmarks() {
       rect(gateLeftX + 10, gateTopY + 62, 8, 22, 2);
       rect(gateRightX + 10, gateTopY + 26, 8, 22, 2);
       rect(gateRightX + 10, gateTopY + 62, 8, 22, 2);
+    } else {
+      // =================================================================
+      // 2-1 地下秘室（135 格）專屬背景：古代砂岩地宮、壁畫、破損石柱、聖火祭壇與流沙豎井
+      // （不顯示戶外太陽、沙丘、棕櫚樹與遠景金字塔；位於地形與角色後方）
+      // =================================================================
+      let secretWidth = 135 * 40; // 5400px
+
+      // S-1 深層古代砂岩磚牆底幕（覆蓋整座 135 格地下秘室）
+      fill("#2B1C12");
+      rect(0, 0, secretWidth, 600);
+
+      // S-2 遠景砂岩砌石橫紋與浮雕壁畫板（視差 0.45）
+      fill("#3B2719");
+      for (let i = 0; i < 18; i++) {
+        let wx = i * 320 + cameraX * 0.55;
+        rect(wx, 80, 260, 440, 6);
+        fill("#4E3422");
+        rect(wx + 28, 125, 204, 150, 4);
+        fill("#7F5539");
+        circle(wx + 130, 185, 44);
+        triangle(wx + 80, 255, wx + 130, 205, wx + 180, 255);
+        fill("#3B2719");
+      }
+
+      // S-3 分區 A 入口流沙豎井光束（col 2~5 頂部滲入的地表流沙微光，交代來路）
+      fill(246, 189, 96, 36);
+      quad(85, 0, 175, 0, 235, 480, 55, 480);
+      fill(230, 180, 110, 55);
+      rect(118, 0, 24, 160);
+
+      // S-4 中景破損古代砂岩石柱群（避開 row 7 棧道高度，營造地宮縱深感）
+      const brokenPillars = [
+        { col: 12, topY: 165, brokenTop: true },
+        { col: 26, topY: 80,  brokenTop: false },
+        { col: 54, topY: 195, brokenTop: true },
+        { col: 64, topY: 80,  brokenTop: false },
+        { col: 97, topY: 175, brokenTop: true },
+        { col: 113, topY: 80, brokenTop: false }
+      ];
+      for (let p of brokenPillars) {
+        let px = p.col * 40 + 4;
+        fill("#583E2B");
+        rect(px, p.topY, 32, 520 - p.topY);
+        fill("#6F4E37");
+        rect(px + 6, p.topY + 8, 6, 520 - p.topY - 16);
+        rect(px + 20, p.topY + 8, 6, 520 - p.topY - 16);
+        if (p.brokenTop) {
+          fill("#583E2B");
+          triangle(px, p.topY, px + 12, p.topY - 14, px + 20, p.topY);
+          triangle(px + 16, p.topY, px + 26, p.topY - 9, px + 32, p.topY);
+        } else {
+          fill("#7F5539");
+          rect(px - 6, p.topY, 44, 16, 2);
+        }
+      }
+
+      // S-5 分區 C 中央古代祭壇神龕背牆與聖火壁燈光暈（col 83~92）
+      let altarX = 83 * 40;
+      let altarW = 10 * 40;
+      fill("#4A3222");
+      rect(altarX, 110, altarW, 410, 8, 8, 0, 0);
+      fill("#6C4A33");
+      rect(altarX + 20, 130, altarW - 40, 390, 4, 4, 0, 0);
+      let altarGlow = 120 + sin(frameCount * 0.06) * 45;
+      fill(255, 209, 102, altarGlow);
+      circle(altarX + altarW / 2, 225, 76);
+      fill("#2B1C12");
+      circle(altarX + altarW / 2, 225, 42);
+      fill(64, 224, 208, altarGlow + 20);
+      circle(altarX + altarW / 2, 225, 22);
+
+      // S-6 沿途壁掛火炬與徑向漸層暖橘光暈（位置皆避開 row 7 棧道，且邊緣柔和淡出）
+      const torchSpots = [
+        { col: 15, y: 245 },
+        { col: 31, y: 220 },
+        { col: 54, y: 220 },
+        { col: 72, y: 245 },
+        { col: 83, y: 215 },
+        { col: 92, y: 215 },
+        { col: 103, y: 245 },
+        { col: 119, y: 260 }
+      ];
+      let flicker = sin(frameCount * 0.22) * 5;
+      let ctx = drawingContext;
+      for (let ts of torchSpots) {
+        let tx = ts.col * 40 + 20;
+        let ty = ts.y;
+        let glowR = 86 + flicker;
+
+        // 徑向漸層暖橘光暈（柔和淡出至完全透明，無硬邊圓盤）
+        ctx.save();
+        let grad = ctx.createRadialGradient(tx, ty - 8, 4, tx, ty - 8, glowR);
+        grad.addColorStop(0, "rgba(255, 215, 120, 0.34)");
+        grad.addColorStop(0.45, "rgba(255, 155, 50, 0.16)");
+        grad.addColorStop(1, "rgba(255, 130, 30, 0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(tx, ty - 8, glowR, 0, TWO_PI);
+        ctx.fill();
+        ctx.restore();
+
+        // 壁掛火炬座與火焰
+        fill("#3D2516");
+        rect(tx - 3, ty, 6, 22, 2);
+        fill("#FF7B00");
+        ellipse(tx, ty - 6, 12, 18 + flicker * 0.3);
+        fill("#FFD166");
+        ellipse(tx, ty - 4, 6, 10);
+      }
     }
   } else if (currentLevel === 2) {
     // 2-2：沙暴黃昏轉入地下邊緣（遠景半掩埋的遺跡石柱）
