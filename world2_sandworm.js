@@ -399,6 +399,24 @@ function updateSandwormBoss(playerW, playerH) {
   }
 
   // 玩家本體與巨蟲碰撞判定
+  // 0. 招式 3（BURROW_AMBUSH）地底鑽潛破土衝出瞬間（ERUPT）：直接判定巨蟲頭部衝出點，避免體節延遲與高度過濾漏判
+  if (gameState === "PLAYING" && b.state === "BURROW_AMBUSH" && b.subPhase === "ERUPT" && b.headY <= 13.4 * TILE_SIZE) {
+    if (dist(characterX, characterY, b.headX, b.headY) < (playerW / 2 + 40)) {
+      if (starTimer > 0) {
+        damageSandworm(5, b.headX, b.headY, true);
+        return;
+      } else if (powerLevel === 3 && powerType === "cactus" && isCrouching && invincibleTimer <= 0) {
+        invincibleTimer = 1000;
+        knockbackVX = (characterX < b.headX ? -1 : 1) * 10.5;
+        playSFX("stomp");
+        floatingTexts.push({ text: "🌵 尖刺格擋！", x: characterX - 30, y: characterY - 40, vy: -1.2, life: 45 });
+      } else if (invincibleTimer <= 0) {
+        takeDamage();
+        return;
+      }
+    }
+  }
+
   if (gameState === "PLAYING" && tail.y < 13.5 * TILE_SIZE) {
     // 1. 判定是否命中「發光尾部弱點」
     if (b.state !== "COUNTER_SHOCK" && dist(characterX, characterY, tail.x, tail.y) < (playerW / 2 + 30)) {
