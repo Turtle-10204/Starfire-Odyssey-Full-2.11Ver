@@ -412,14 +412,7 @@ function drawMap(viewWorldW = width) {
           continue;
         }
         if (tile === 'Q') {
-          noStroke();
-          fill("#D4A373");
-          rect(tileX, tileY, TILE_SIZE, TILE_SIZE);
-          fill("#FAEDCD");
-          let wave = sin(frameCount * 0.12 + col) * 4;
-          ellipse(tileX + 12 + wave, tileY + 8, 16, 6);
-          ellipse(tileX + 28 - wave, tileY + 22, 18, 6);
-          continue;
+          continue; // 改由下方統一繪製無稜角連續流沙曲面
         }
         if (tile === 'K') {
           noStroke();
@@ -498,15 +491,15 @@ function drawMap(viewWorldW = width) {
         } else if (tile === 'B') {
           image(textures["BRICK"], tileX, tileY);
         } else if (tile === '?' || tile === 'M' || tile === '*' || tile === 't') {
-       image(textures["QBOX"], tileX, tileY);
-       if (floor(frameCount / 15) % 2 === 0) {
-         noStroke();
-         fill(255, 255, 220, 75);
-         rect(tileX + 3, tileY + 3, TILE_SIZE - 6, TILE_SIZE - 6, 3);
-       }
+          image(textures["QBOX"], tileX, tileY);
+          if (floor(frameCount / 15) % 2 === 0) {
+            noStroke();
+            fill(255, 255, 220, 75);
+            rect(tileX + 3, tileY + 3, TILE_SIZE - 6, TILE_SIZE - 6, 3);
+          }
         } else if (tile === 'E') {
           image(textures["EMPTY"], tileX, tileY);
-          } else if (tile === 'O') {
+        } else if (tile === 'O') {
           let spinW = max(5, abs(cos(frameCount * 0.08 + col * 0.5)) * 18);
           fill("#FFD166");
           stroke("#B8860B");
@@ -536,7 +529,7 @@ function drawMap(viewWorldW = width) {
           rect(tileX + 18, tileY + 6, 4, 28);
           fill("#FFD700");
           arc(tileX + 20, tileY + 14, 24, 18, -HALF_PI, HALF_PI);
-       } else if (tile === 'P' || tile === 'p' || tile === 'u') {
+        } else if (tile === 'P' || tile === 'p' || tile === 'u') {
           let isCeilingPipe = (row >= 2 && levelMap[0][col] === 'B' && levelMap[1][col] === 'B' && levelMap[2][col] === tile);
           let isMouth = isCeilingPipe
             ? (row === levelMap.length - 1 || levelMap[row + 1][col] !== tile)
@@ -555,33 +548,33 @@ function drawMap(viewWorldW = width) {
             }
             continue;
           }
-        if (!(row > 0 && levelMap[row - 1][col] === 'H')) {
-          let isDoubleH = (row + 1 < levelMap.length && levelMap[row + 1][col] === 'H');
-          let pipeHHeight = isDoubleH ? TILE_SIZE * 2 : TILE_SIZE;
-          let isLeftMouth = (col === 0 || levelMap[row][col - 1] !== 'H');
-          let px = tileX;
-          let py = tileY - 6;
-          let ph = pipeHHeight + 6;
+          if (!(row > 0 && levelMap[row - 1][col] === 'H')) {
+            let isDoubleH = (row + 1 < levelMap.length && levelMap[row + 1][col] === 'H');
+            let pipeHHeight = isDoubleH ? TILE_SIZE * 2 : TILE_SIZE;
+            let isLeftMouth = (col === 0 || levelMap[row][col - 1] !== 'H');
+            let px = tileX;
+            let py = tileY - 6;
+            let ph = pipeHHeight + 6;
 
-          noStroke();
-          fill("#1B7F3A");
-          rect(px, py, TILE_SIZE, ph);
-          fill("#2EC4B6");
-          rect(px, py + 5, TILE_SIZE, 6);
-          fill("#80ED99");
-          rect(px, py + 15, TILE_SIZE, 14);
-          fill("#134E27");
-          rect(px, py + ph - 10, TILE_SIZE, 10);
-
-          if (isLeftMouth) {
-            fill("#0D3B1E");
-            rect(px - 2, py - 3, 12, ph + 6, 2);
+            noStroke();
             fill("#1B7F3A");
-            rect(px, py - 1, 8, ph + 2);
+            rect(px, py, TILE_SIZE, ph);
+            fill("#2EC4B6");
+            rect(px, py + 5, TILE_SIZE, 6);
             fill("#80ED99");
-            rect(px + 2, py + 12, 4, 18);
+            rect(px, py + 15, TILE_SIZE, 14);
+            fill("#134E27");
+            rect(px, py + ph - 10, TILE_SIZE, 10);
+
+            if (isLeftMouth) {
+              fill("#0D3B1E");
+              rect(px - 2, py - 3, 12, ph + 6, 2);
+              fill("#1B7F3A");
+              rect(px, py - 1, 8, ph + 2);
+              fill("#80ED99");
+              rect(px + 2, py + 12, 4, 18);
+            }
           }
-        }
         } else if (tile === '=') {
           noStroke();
           fill("#6C584C");
@@ -597,32 +590,43 @@ function drawMap(viewWorldW = width) {
           fill("#FFFFFF");
           rect(tileX + TILE_SIZE / 2 - 4, tileY, 8, TILE_SIZE);
         } else if (tile === '|') {
-        noStroke();
-        fill("#FFFFFF");
-        rect(tileX + TILE_SIZE / 2 - 4, tileY, 8, TILE_SIZE);
-        if (row === 0 || (levelMap[row - 1][col] !== '|' && levelMap[row - 1][col] !== 'F')) {
-          fill("#2ECC71");
-          let fy = tileY + flagDropY;
-          triangle(tileX + TILE_SIZE / 2 - 4, fy, tileX + TILE_SIZE / 2 - 36, fy + 15, tileX + TILE_SIZE / 2 - 4, fy + 30);
-        }
-      } else if (tile === 'C') {
+          noStroke();
+          fill("#FFFFFF");
+          rect(tileX + TILE_SIZE / 2 - 4, tileY, 8, TILE_SIZE);
+          if (row === 0 || (levelMap[row - 1][col] !== '|' && levelMap[row - 1][col] !== 'F')) {
+            fill("#2ECC71");
+            let fy = tileY + flagDropY;
+            triangle(tileX + TILE_SIZE / 2 - 4, fy, tileX + TILE_SIZE / 2 - 36, fy + 15, tileX + TILE_SIZE / 2 - 4, fy + 30);
+          }
+        } else if (tile === 'C') {
           let isTop = (row === 0 || levelMap[row - 1][col] !== 'C');
           let isBottom = (row === levelMap.length - 1 || levelMap[row + 1][col] !== 'C');
           let isLeftEdge = (col === 0 || levelMap[row][col - 1] !== 'C');
-          let isRightEdge = (col === levelMap[row].length - 1 || levelMap[row][col + 1] !== 'C');
-          let isCenterDoor = (isBottom && !isLeftEdge && !isRightEdge &&
-                              levelMap[row][col - 1] === 'C' && levelMap[row][col + 1] === 'C');
-
+          let isRightEdge = (col === levelMap[0].length - 1 || levelMap[row][col + 1] !== 'C');
+          let isCenterDoor = (row >= 11 && !isLeftEdge && !isRightEdge &&
+                              col >= 2 && levelMap[row][col - 2] === 'C' &&
+                              col + 2 < levelMap[0].length && levelMap[row][col + 2] === 'C');
+          let isSecretCastle = (typeof is2_1SubSecret !== "undefined" && is2_1SubSecret);
+          let isW2 = (currentWorld === 2);
 
           if (isTop) {
-            image(textures["CASTLE_TOP"], tileX, tileY);
+            let tex = isSecretCastle
+              ? (textures["CASTLE_SLATE_TOP"] || textures["CASTLE_TOP"])
+              : ((isW2 && textures["CASTLE_SAND_TOP"]) ? textures["CASTLE_SAND_TOP"] : textures["CASTLE_TOP"]);
+            image(tex, tileX, tileY);
           } else if (isCenterDoor) {
-            image(textures["CASTLE_DOOR"], tileX, tileY);
+            let tex = isSecretCastle
+              ? (textures["CASTLE_SLATE_DOOR"] || textures["CASTLE_DOOR"])
+              : ((isW2 && textures["CASTLE_SAND_DOOR"]) ? textures["CASTLE_SAND_DOOR"] : textures["CASTLE_DOOR"]);
+            image(tex, tileX, tileY);
           } else {
-            image(textures["CASTLE_WALL"], tileX, tileY);
-            // 中層左右兩側自動加裝飾小拱窗
+            let tex = isSecretCastle
+              ? (textures["CASTLE_SLATE_WALL"] || textures["CASTLE_WALL"])
+              : ((isW2 && textures["CASTLE_SAND_WALL"]) ? textures["CASTLE_SAND_WALL"] : textures["CASTLE_WALL"]);
+            image(tex, tileX, tileY);
+            // 中層左右兩側自動加裝飾小拱窗（深板岩城堡帶幽藍符文窗光）
             if (!isBottom && (isLeftEdge || isRightEdge)) {
-              fill("#1A0505");
+              fill(isSecretCastle ? "#112A38" : (isW2 ? "#2B190E" : "#1A0505"));
               rect(tileX + 13, tileY + 10, 14, 20, 7, 7, 0, 0);
             }
           }
@@ -630,6 +634,119 @@ function drawMap(viewWorldW = width) {
       }
     }
   }
+
+  // === 連續無稜角流沙曲面繪製（固定 X 網格＋餘弦平滑插值，零回彈、零縫隙） ===
+  let startC = max(0, floor(cameraX / TILE_SIZE) - 2);
+  let endC = min(levelMap[0].length - 1, ceil((cameraX + viewWorldW) / TILE_SIZE) + 2);
+
+  let moundTopY = {};
+  let moundBotY = {};
+  let hasCeilingPour = {};
+
+  for (let col = startC; col <= endC; col++) {
+    let r = 0;
+    while (r < levelMap.length) {
+      if (levelMap[r][col] === 'Q') {
+        let topR = r;
+        while (r + 1 < levelMap.length && levelMap[r + 1][col] === 'Q') r++;
+        let botR = r;
+        if (botR >= 10) {
+          moundTopY[col] = topR * TILE_SIZE;
+          moundBotY[col] = (botR + 1) * TILE_SIZE;
+          if (topR <= 2) hasCeilingPour[col] = true;
+        }
+      }
+      r++;
+    }
+  }
+
+  // 兩輪鄰域平滑（天花板垂直沙瀑鎖定 topY = 0 不變形）
+  for (let pass = 0; pass < 2; pass++) {
+    let nextTop = {};
+    for (let cStr in moundTopY) {
+      let c = int(cStr);
+      if (hasCeilingPour[c]) {
+        nextTop[c] = moundTopY[c];
+        continue;
+      }
+      let cur = moundTopY[c];
+      let l = (moundTopY[c - 1] !== undefined) ? moundTopY[c - 1] : cur + TILE_SIZE * 0.55;
+      let r = (moundTopY[c + 1] !== undefined) ? moundTopY[c + 1] : cur + TILE_SIZE * 0.55;
+      nextTop[c] = l * 0.25 + cur * 0.5 + r * 0.25;
+    }
+    moundTopY = nextTop;
+  }
+
+  noStroke();
+  let c = startC;
+  while (c <= endC) {
+    if (moundTopY[c] !== undefined) {
+      let runStart = c;
+      while (c + 1 <= endC && moundTopY[c + 1] !== undefined) c++;
+      let runEnd = c;
+
+      let maxBotY = 0;
+      for (let sc = runStart; sc <= runEnd; sc++) {
+        maxBotY = max(maxBotY, moundBotY[sc]);
+      }
+
+      // 檢查左右相鄰格是否為實心硬方塊（決定沙坑邊緣要貼平牆面還是自然斜落到地面）
+      let checkRowL = constrain(floor(moundTopY[runStart] / TILE_SIZE), 0, levelMap.length - 1);
+      let checkRowR = constrain(floor(moundTopY[runEnd] / TILE_SIZE), 0, levelMap.length - 1);
+      let leftWall = (runStart > 0 && levelMap[checkRowL][runStart - 1] !== ' ' && levelMap[checkRowL][runStart - 1] !== 'Q');
+      let rightWall = (runEnd + 1 < levelMap[0].length && levelMap[checkRowR][runEnd + 1] !== ' ' && levelMap[checkRowR][runEnd + 1] !== 'Q');
+
+      // 取得每一欄中心的目標高度，並推算左右邊界高度
+      let getSampleY = (sc) => moundTopY[sc];
+      let leftBoundaryY = (leftWall || hasCeilingPour[runStart]) ? moundTopY[runStart] : maxBotY;
+      let rightBoundaryY = (rightWall || hasCeilingPour[runEnd]) ? moundTopY[runEnd] : maxBotY;
+
+      // 建立高密度單調遞增 X 節點陣列（保證 X 座標 100% 鎖死在格子內，絕不鼓出或內縮）
+      let pts = [];
+      pts.push({ x: runStart * TILE_SIZE, y: leftBoundaryY });
+      for (let sc = runStart; sc <= runEnd; sc++) {
+        if (hasCeilingPour[sc]) {
+          // 垂直沙瀑頂端保持水平直線，絕不長貓耳朵
+          pts.push({ x: sc * TILE_SIZE, y: moundTopY[sc] });
+          pts.push({ x: (sc + 1) * TILE_SIZE, y: moundTopY[sc] });
+        } else {
+          pts.push({ x: sc * TILE_SIZE + TILE_SIZE * 0.5, y: getSampleY(sc) });
+        }
+      }
+      pts.push({ x: (runEnd + 1) * TILE_SIZE, y: rightBoundaryY });
+
+      // 用餘弦平滑插值（Cosine Interpolation）把相鄰節點細分成 8 段平滑斜坡（無任何 overshoot 回彈）
+      fill("#D4A373");
+      beginShape();
+      vertex(runStart * TILE_SIZE, maxBotY);
+      for (let i = 0; i < pts.length - 1; i++) {
+        let p0 = pts[i];
+        let p1 = pts[i + 1];
+        if (abs(p1.x - p0.x) < 0.01 && abs(p1.y - p0.y) < 0.01) continue;
+        let steps = 8;
+        for (let s = 0; s <= steps; s++) {
+          let t = s / steps;
+          let cosT = (1 - cos(t * PI)) * 0.5;
+          let sx = lerp(p0.x, p1.x, t);
+          let sy = lerp(p0.y, p1.y, cosT);
+          vertex(sx, sy);
+        }
+      }
+      vertex((runEnd + 1) * TILE_SIZE, maxBotY);
+      endShape(CLOSE);
+
+      // 沙體內部的流動細沙波紋
+      fill(250, 237, 205, 165);
+      for (let sc = runStart; sc <= runEnd; sc++) {
+        let wave = sin(frameCount * 0.09 + sc * 0.7) * 3;
+        for (let wy = moundTopY[sc] + 16; wy < maxBotY - 8; wy += 24) {
+          ellipse(sc * TILE_SIZE + 20 + wave, wy, 14, 4);
+        }
+      }
+    }
+    c++;
+  }
+
   pop();
 }
 
