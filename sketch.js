@@ -137,6 +137,28 @@ function setup() {
   }
 } 
 
+function applySkyBackground() {
+  if (currentWorld === 2) {
+    if (typeof is2_1SubSecret !== "undefined" && is2_1SubSecret) {
+      background("#2B190E");
+    } else if (currentLevel === 4) {
+      background(window.isInMinerSupplyRoom ? "#2B1E16" : "#05050C");
+    } else if (currentLevel === 3 || currentLevel === 5) {
+      background("#2B190E");
+    } else {
+      background("#F6BD60");
+    }
+  } else if (currentLevel === 1 || is1_2Intro) {
+    background("#6b8cff");
+  } else if (currentLevel === 2) {
+    background("#0a0a12");
+  } else if (currentLevel === 3) {
+    background("#ff9a76");
+  } else {
+    background("#1a0505");
+  }
+}
+
 function drawDeathAnimation() {
   let elapsed = millis() - deathAnimTimer;
   // 深淵墜落是在畫面外死亡，直接跳過階段 1（不畫坑口倒地精靈圖），直接進行聚光燈縮光圈
@@ -162,23 +184,7 @@ function drawDeathAnimation() {
   }
 
   // 1. 繪製靜止的世界底層（背景、地形、敵人、平台）
-  if (currentWorld === 2) {
-    if (currentLevel === 4) {
-      background(window.isInMinerSupplyRoom ? "#2B1E16" : "#05050C");
-    } else if (currentLevel === 3 || currentLevel === 5) {
-      background("#2B190E");
-    } else {
-      background("#F6BD60");
-    }
-  } else if (currentLevel === 1 || is1_2Intro) {
-    background("#6b8cff");
-  } else if (currentLevel === 2) {
-    background("#0a0a12");
-  } else if (currentLevel === 3) {
-    background("#ff9a76");
-  } else {
-    background("#1a0505");
-  }
+  applySkyBackground();
 
   let z = getEffectiveViewZoom();
   let viewWorldW = width / z;
@@ -521,10 +527,27 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       characterX += moveX;
       if (characterX >= castleTargetX) {
         characterX = castleTargetX;
-        hideCharacter = true; 
+        hideCharacter = true;
         stateTimer = millis();
         castleFlagRaised = true;
         castleFlagProgress = 0;
+
+        let foundTopRow = -1;
+        let minCCol = Infinity;
+        let maxCCol = -Infinity;
+        for (let r = 0; r < levelMap.length; r++) {
+          for (let c = 0; c < levelMap[r].length; c++) {
+            if (levelMap[r][c] === 'C') {
+              if (foundTopRow === -1) foundTopRow = r;
+              if (c < minCCol) minCCol = c;
+              if (c > maxCCol) maxCCol = c;
+            }
+          }
+        }
+        castleRoofTopY = (foundTopRow !== -1 ? foundTopRow : 8) * TILE_SIZE;
+        if (minCCol <= maxCCol) {
+          castleTargetX = ((minCCol + maxCCol + 1) / 2) * TILE_SIZE;
+        }
         let topCastleRow = 8;
         for (let r = 0; r < levelMap.length; r++) {
           if (levelMap[r].includes('C')) {
@@ -767,6 +790,12 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       is2_1SubSecret = true;
       let subData = buildWorld2SubSecretMap();
       loadLevelMap(subData.mapStrings);
+      movingPlatforms = [];
+      items = [];
+      coins = [];
+      bumpingTiles = [];
+      playerFireballs = [];
+      cactusNeedles = [];
       enemies = [];
       for (let sp of subData.enemySpawns) {
         let h = sp.type === "goomba" ? 30 : 38;
@@ -850,6 +879,15 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     let prevFeetY = characterY + currentHitboxH / 2;
     characterY += velocityY; 
     isOnGround = false; 
+
+    // 僅在有實心天花板的室內／地下／秘室關卡防止跳出頂端走「員工通道」，露天關卡不限制跳躍高度
+    let hasSolidCeilingMap = (typeof is2_1SubSecret !== "undefined" && is2_1SubSecret) ||
+                             (currentWorld === 1 && currentLevel === 2 && !is1_2Intro) ||
+                             (currentLevel === 4);
+    if (hasSolidCeilingMap && characterY - currentHitboxH / 2 < 0) {
+      characterY = currentHitboxH / 2;
+      if (velocityY < 0) velocityY = 0;
+    }
     
     if (velocityY < 0) {
       let headY = characterY - currentHitboxH / 2;
@@ -1002,26 +1040,49 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
           }
         }
         if (levelMap[footRow][pCol] === 'Q') {
-          if (powerLevel === 3 && powerType === "chrono") {
-            if (velocityY > 0) {
-              velocityY = 0;
-              characterY = footRow * TILE_SIZE - currentHitboxH / 2;
-              isOnGround = true;
+          // 計算與 drawMap() 完全同步的平滑沙丘表面高度
+          let getColSandTopY = (colIdx) => {
+            if (colIdx < 0 || colIdx >= levelMap[0].length) return (footRow + 1) * TILE_SIZE;
+            for (let rr = 0; rr < levelMap.length; rr++) {
+              if (levelMap[rr][colIdx] === 'Q') {
+                let b = rr;
+                while (b + 1 < levelMap.length && levelMap[b + 1][colIdx] === 'Q') b++;
+                if (b >= 10) return rr * TILE_SIZE;
+              }
             }
-          } else {
-            // 減慢下沉速度，給玩家充足反應時間
-            if (velocityY > 0.42) velocityY = 0.42;
-            isOnGround = true;
-            isActionLocked = false;
+            return (footRow + 1) * TILE_SIZE;
+          };
 
-            // 偵測玩家按跳躍鍵：每按一次就把雙腳往上拔一截並給予脫困向上衝量
-            if (keyIsDown(UP_ARROW) || keyIsDown(87) || keyIsDown(32)) {
-              characterY -= 12;
-              velocityY = -10.5;
-              isOnGround = false;
-              playSFX("jump");
-            } else if (frameCount % 22 === 0) {
-              floatingTexts.push({ text: "流沙！連跳脫困", x: characterX - 35, y: characterY - 35, vy: -0.8, life: 25 });
+          let yL = getColSandTopY(pCol - 1);
+          let yC = getColSandTopY(pCol);
+          let yR = getColSandTopY(pCol + 1);
+          let smoothC = yL * 0.25 + yC * 0.5 + yR * 0.25;
+          let localRatio = constrain((characterX - pCol * TILE_SIZE) / TILE_SIZE, 0, 1);
+          let sandSurfaceY = (localRatio < 0.5)
+            ? lerp((yL + smoothC) * 0.5, smoothC, localRatio * 2)
+            : lerp(smoothC, (smoothC + yR) * 0.5, (localRatio - 0.5) * 2);
+
+          let feetY = characterY + currentHitboxH / 2;
+          if (feetY >= sandSurfaceY - 2) {
+            if (powerLevel === 3 && powerType === "chrono") {
+              if (velocityY >= 0) {
+                velocityY = 0;
+                characterY = sandSurfaceY - currentHitboxH / 2;
+                isOnGround = true;
+              }
+            } else {
+              if (velocityY > 0.42) velocityY = 0.42;
+              isOnGround = true;
+              isActionLocked = false;
+
+              if (keyIsDown(UP_ARROW) || keyIsDown(87) || keyIsDown(32)) {
+                characterY -= 12;
+                velocityY = -10.5;
+                isOnGround = false;
+                playSFX("jump");
+              } else if (frameCount % 22 === 0) {
+                floatingTexts.push({ text: "流沙！連跳脫困", x: characterX - 35, y: characterY - 35, vy: -0.8, life: 25 });
+              }
             }
           }
         }
@@ -1102,23 +1163,7 @@ function draw() {
 
   updateBGM();
 
-  if (currentWorld === 2) {
-    if (currentLevel === 4) {
-      background(window.isInMinerSupplyRoom ? "#2B1E16" : "#05050C");
-    } else if (currentLevel === 3 || currentLevel === 5) {
-      background("#2B190E");
-    } else {
-      background("#F6BD60");
-    }
-  } else if (currentLevel === 1 || is1_2Intro) {
-    background("#6b8cff"); 
-  } else if (currentLevel === 2) {
-    background("#0a0a12");
-  } else if (currentLevel === 3) {
-    background("#ff9a76");
-  } else {
-    background("#1a0505"); 
-  }
+  applySkyBackground();
 
   let z = getEffectiveViewZoom();
   let viewWorldW = width / z;
@@ -1473,44 +1518,42 @@ function draw() {
   let mapOffsetY = viewWorldH - (levelMap.length * TILE_SIZE);
   translate(-cameraX, mapOffsetY); 
 
-  if (castleFlagRaised) {
-  castleFlagProgress = min(1, castleFlagProgress + 0.035);
-  let poleHeight = 52 * castleFlagProgress;
-  let poleBaseY = castleRoofTopY + 14;
-  let poleTopY = poleBaseY - poleHeight;
-
-  push();
-  // 旗桿
-  stroke("#FFFFFF");
-  strokeWeight(4);
-  line(castleTargetX, poleBaseY, castleTargetX, poleTopY);
-
-  // 旗桿頂端金球
-  noStroke();
-  fill("#FFD166");
-  ellipse(castleTargetX, poleTopY, 10, 10);
-
-  // 升起超過一半時展開紅色金星小旗子
-  if (castleFlagProgress > 0.35) {
-    let wave = sin(frameCount * 0.2) * 2.5;
-    fill("#E63946");
-    stroke("#540B0E");
-    strokeWeight(1.5);
-    beginShape();
-    vertex(castleTargetX, poleTopY + 3);
-    vertex(castleTargetX + 34, poleTopY + 12 + wave);
-    vertex(castleTargetX, poleTopY + 23);
-    endShape(CLOSE);
-
-    // 旗面中央小星星徽章
-    noStroke();
-    fill("#FFD166");
-    ellipse(castleTargetX + 12, poleTopY + 13 + wave * 0.4, 7, 7);
-  }
-  pop();
-}
   drawWorld2AtmosphereAndLandmarks(); // 畫在所有磚塊與角色後方
   drawMap(viewWorldW);
+
+  if (castleFlagRaised) {
+    castleFlagProgress = min(1, castleFlagProgress + 0.035);
+    let poleHeight = 56 * castleFlagProgress;
+    let poleBaseY = castleRoofTopY + 12;
+    let poleTopY = poleBaseY - poleHeight;
+    let isSecretFlag = (typeof isSecretClear !== "undefined" && isSecretClear);
+
+    push();
+    stroke(isSecretFlag ? "#FFD166" : "#FFFFFF");
+    strokeWeight(4);
+    line(castleTargetX, poleBaseY, castleTargetX, poleTopY);
+
+    noStroke();
+    fill(isSecretFlag ? "#FF4D6D" : "#FFD166");
+    ellipse(castleTargetX, poleTopY, 11, 11);
+
+    if (castleFlagProgress > 0.3) {
+      let wave = sin(frameCount * 0.2) * 2.5;
+      fill(isSecretFlag ? "#C1121F" : "#E63946");
+      stroke(isSecretFlag ? "#FFD166" : "#540B0E");
+      strokeWeight(1.5);
+      beginShape();
+      vertex(castleTargetX, poleTopY + 3);
+      vertex(castleTargetX + 36, poleTopY + 12 + wave);
+      vertex(castleTargetX, poleTopY + 24);
+      endShape(CLOSE);
+
+      noStroke();
+      fill("#FFD166");
+      ellipse(castleTargetX + 12, poleTopY + 13 + wave * 0.4, 7, 7);
+    }
+    pop();
+  }
   drawOneWayPlatforms();
   drawMovingPlatforms();
   drawEnemies();
