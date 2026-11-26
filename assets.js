@@ -254,6 +254,7 @@ function buildTexturePack() {
   stair.fill("#B08968");
   stair.rect(6, 6, TILE_SIZE - 12, TILE_SIZE - 12);
   textures["STAIR"] = stair;
+
   // 1. 城堡紅磚牆材質 (CASTLE_WALL)
   let cWall = createGraphics(TILE_SIZE, TILE_SIZE);
   cWall.noStroke();
@@ -295,4 +296,95 @@ function buildTexturePack() {
   cDoor.fill("#140B0B");
   cDoor.rect(6, 8, TILE_SIZE - 12, TILE_SIZE - 8, 14, 14, 0, 0);
   textures["CASTLE_DOOR"] = cDoor;
+
+  // 4. 世界 2 砂岩城堡牆面材質 (CASTLE_SAND_WALL)
+  let csWall = createGraphics(TILE_SIZE, TILE_SIZE);
+  csWall.noStroke();
+  csWall.fill("#B08968");
+  csWall.rect(0, 0, TILE_SIZE, TILE_SIZE);
+  csWall.fill("#DDB892");
+  csWall.rect(1, 1, 18, 8);
+  csWall.rect(21, 1, 18, 8);
+  csWall.rect(1, 21, 18, 8);
+  csWall.rect(21, 21, 18, 8);
+  csWall.fill("#7F5539");
+  csWall.rect(0, 18, TILE_SIZE, 2);
+  csWall.rect(0, 38, TILE_SIZE, 2);
+  csWall.rect(19, 0, 2, 18);
+  csWall.rect(9, 20, 2, 18);
+  csWall.rect(29, 20, 2, 18);
+  textures["CASTLE_SAND_WALL"] = csWall;
+
+  // 5. 世界 2 砂岩城堡頂部城垛材質 (CASTLE_SAND_TOP)
+  let csTop = createGraphics(TILE_SIZE, TILE_SIZE);
+  csTop.noStroke();
+  csTop.fill("#B08968");
+  csTop.rect(0, 14, TILE_SIZE, TILE_SIZE - 14);
+  csTop.fill("#DDB892");
+  csTop.rect(2, 0, 14, 16, 2);
+  csTop.rect(24, 0, 14, 16, 2);
+  csTop.fill("#7F5539");
+  csTop.rect(0, 14, TILE_SIZE, 3);
+  csTop.rect(0, 38, TILE_SIZE, 2);
+  textures["CASTLE_SAND_TOP"] = csTop;
+
+  // 6. 世界 2 砂岩城堡拱門材質 (CASTLE_SAND_DOOR)
+  let csDoor = createGraphics(TILE_SIZE, TILE_SIZE);
+  csDoor.noStroke();
+  csDoor.fill("#B08968");
+  csDoor.rect(0, 0, TILE_SIZE, TILE_SIZE);
+  csDoor.fill("#DDB892");
+  csDoor.rect(2, 2, TILE_SIZE - 4, TILE_SIZE - 2, 18, 18, 0, 0);
+  csDoor.fill("#2B190E");
+  csDoor.rect(6, 8, TILE_SIZE - 12, TILE_SIZE - 8, 14, 14, 0, 0);
+  textures["CASTLE_SAND_DOOR"] = csDoor;
+
+  // 7. 特殊通關：深板岩偏黑城堡牆面材質 (CASTLE_SLATE_WALL)
+  let cslWall = createGraphics(TILE_SIZE, TILE_SIZE);
+  cslWall.noStroke();
+  cslWall.fill("#1E2229");
+  cslWall.rect(0, 0, TILE_SIZE, TILE_SIZE);
+  cslWall.fill("#343A46");
+  cslWall.rect(1, 1, 18, 8);
+  cslWall.rect(21, 1, 18, 8);
+  cslWall.rect(1, 21, 18, 8);
+  cslWall.rect(21, 21, 18, 8);
+  cslWall.fill("#282D37");
+  cslWall.rect(3, 10, 14, 6);
+  cslWall.rect(23, 10, 14, 6);
+  cslWall.rect(11, 30, 16, 6);
+  cslWall.fill("#0D0F12");
+  cslWall.rect(0, 18, TILE_SIZE, 2);
+  cslWall.rect(0, 38, TILE_SIZE, 2);
+  cslWall.rect(19, 0, 2, 18);
+  cslWall.rect(9, 20, 2, 18);
+  cslWall.rect(29, 20, 2, 18);
+  textures["CASTLE_SLATE_WALL"] = cslWall;
+
+  // 8. 特殊通關：深板岩偏黑城堡頂部城垛材質 (CASTLE_SLATE_TOP)
+  let cslTop = createGraphics(TILE_SIZE, TILE_SIZE);
+  cslTop.noStroke();
+  cslTop.fill("#1E2229");
+  cslTop.rect(0, 14, TILE_SIZE, TILE_SIZE - 14);
+  cslTop.fill("#343A46");
+  cslTop.rect(2, 0, 14, 16, 2);
+  cslTop.rect(24, 0, 14, 16, 2);
+  cslTop.fill("#495057");
+  cslTop.rect(3, 1, 12, 3, 1);
+  cslTop.rect(25, 1, 12, 3, 1);
+  cslTop.fill("#0D0F12");
+  cslTop.rect(0, 14, TILE_SIZE, 3);
+  cslTop.rect(0, 38, TILE_SIZE, 2);
+  textures["CASTLE_SLATE_TOP"] = cslTop;
+
+  // 9. 特殊通關：深板岩偏黑城堡拱門材質 (CASTLE_SLATE_DOOR)
+  let cslDoor = createGraphics(TILE_SIZE, TILE_SIZE);
+  cslDoor.noStroke();
+  cslDoor.fill("#1E2229");
+  cslDoor.rect(0, 0, TILE_SIZE, TILE_SIZE);
+  cslDoor.fill("#343A46");
+  cslDoor.rect(2, 2, TILE_SIZE - 4, TILE_SIZE - 2, 18, 18, 0, 0);
+  cslDoor.fill("#090A0D");
+  cslDoor.rect(6, 8, TILE_SIZE - 12, TILE_SIZE - 8, 14, 14, 0, 0);
+  textures["CASTLE_SLATE_DOOR"] = cslDoor;
 }
