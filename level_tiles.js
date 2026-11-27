@@ -77,7 +77,6 @@ function checkEnterPipe(cx, cy, cw, ch) {
   if (col < 0 || col >= levelMap[0].length) return;
   for (let row = startRow; row <= endRow; row++) {
     if (row >= 0 && row < levelMap.length && levelMap[row][col] === 'H') {
-      // 找出橫管最左側管口欄位與最右側深度欄位
       let mouthCol = col;
       while (mouthCol > 0 && levelMap[row][mouthCol - 1] === 'H') {
         mouthCol--;
@@ -86,7 +85,6 @@ function checkEnterPipe(cx, cy, cw, ch) {
       while (endCol + 1 < levelMap[row].length && levelMap[row][endCol + 1] === 'H') {
         endCol++;
       }
-      // 找出橫管最底排，讓主角雙腳精準對齊橫管通道中心地板
       let bottomPipeRow = row;
       while (bottomPipeRow + 1 < levelMap.length && levelMap[bottomPipeRow + 1][mouthCol] === 'H') {
         bottomPipeRow++;
@@ -191,7 +189,7 @@ function updateAndDrawBrickParticles() {
 }
 
 function checkFlagpole(cx, cy, cw, ch) {
-  // 1. 偵測 World 2 中繼存檔旗 ('R')：首次觸碰啟動存檔點＋紅蘑菇變大效果！
+  // 1. 偵測 World 2 中繼存檔旗 ('R')：依是否在 2-1 秘室分別寫入獨立檢查點，互不覆蓋
   let pCol = floor(cx / TILE_SIZE);
   let pRow = floor(cy / TILE_SIZE);
   for (let r = pRow - 1; r <= pRow + 1; r++) {
@@ -202,15 +200,36 @@ function checkFlagpole(cx, cy, cw, ch) {
           for (let fr = 0; fr < levelMap.length; fr++) {
             if (levelMap[fr][c] === 'R') levelMap[fr][c] = 'r';
           }
-          checkpointState = {
-            active: true,
-            world: currentWorld,
-            level: currentLevel,
-            x: c * TILE_SIZE + TILE_SIZE / 2,
-            y: (r - 1) * TILE_SIZE
-          };
+
+          let inSubSecret = (typeof is2_1SubSecret !== "undefined" && is2_1SubSecret);
+          if (inSubSecret) {
+            window.subSecretCheckpointState = {
+              active: true,
+              world: currentWorld,
+              level: currentLevel,
+              col: c,
+              x: c * TILE_SIZE + TILE_SIZE / 2,
+              y: (r - 1) * TILE_SIZE
+            };
+          } else {
+            checkpointState = {
+              active: true,
+              world: currentWorld,
+              level: currentLevel,
+              x: c * TILE_SIZE + TILE_SIZE / 2,
+              y: (r - 1) * TILE_SIZE
+            };
+          }
+
           playSFX("powerup");
-          floatingTexts.push({ text: "CHECKPOINT!", x: c * TILE_SIZE - 30, y: r * TILE_SIZE - 45, vy: -1.5, life: 90, isOneUp: true });
+          floatingTexts.push({
+            text: inSubSecret ? "SECRET CHECKPOINT!" : "CHECKPOINT!",
+            x: c * TILE_SIZE - 30,
+            y: r * TILE_SIZE - 45,
+            vy: -1.5,
+            life: 90,
+            isOneUp: true
+          });
 
           // 首次吃到中繼旗會有紅蘑菇變大效果（若目前是 1 階小隻就升級為 2 階大隻）
           if (powerLevel === 1) {
@@ -231,7 +250,6 @@ function checkFlagpole(cx, cy, cw, ch) {
           score += 10000;
           floatingTexts.push({ text: "SECRET GOAL! +10000", x: c * TILE_SIZE - 50, y: r * TILE_SIZE - 30, vy: -1.5, life: 120, isOneUp: true });
 
-          // 先把主角貼齊旗杆並進入滑旗狀態，而非直接吸向城堡
           characterX = c * TILE_SIZE + TILE_SIZE / 2;
           velocityY = 0;
           isGliding = false;
@@ -239,7 +257,6 @@ function checkFlagpole(cx, cy, cw, ch) {
           isCrouching = false;
           gameState = "FLAG_SLIDE";
 
-          // 自動尋找右邊城堡 'C' 的正中央，滑到底後再走進去
           let minCastleCol = 9999;
           let maxCastleCol = -1;
           for (let cr = 0; cr < levelMap.length; cr++) {
@@ -351,30 +368,25 @@ function drawPipesOnly() {
           : (row === 0 || levelMap[row - 1][col] !== tile);
         image(isMouth ? textures["PIPE_TOP"] : textures["PIPE"], col * TILE_SIZE, row * TILE_SIZE);
       } else if (tile === 'H') {
-        // 如果上方也是 'H'，代表已經由上一排一起畫成整根大橫管了，跳過避免重複切斷
         if (row > 0 && levelMap[row - 1][col] === 'H') continue;
 
         let isDoubleH = (row + 1 < levelMap.length && levelMap[row + 1][col] === 'H');
         let pipeHHeight = isDoubleH ? TILE_SIZE * 2 : TILE_SIZE;
         let isLeftMouth = (col === 0 || levelMap[row][col - 1] !== 'H');
         let px = col * TILE_SIZE;
-        let py = row * TILE_SIZE - 6; // 往上多包 6px，確保高個子主角頭頂也完全進管不露餡
+        let py = row * TILE_SIZE - 6;
         let ph = pipeHHeight + 6;
 
         noStroke();
-        // 管身主色（不透明實心綠，徹底封死不漏風）
         fill("#1B7F3A");
         rect(px, py, TILE_SIZE, ph);
-        // 高光條紋
         fill("#2EC4B6");
         rect(px, py + 5, TILE_SIZE, 6);
         fill("#80ED99");
         rect(px, py + 15, TILE_SIZE, 14);
-        // 底部陰影
         fill("#134E27");
         rect(px, py + ph - 10, TILE_SIZE, 10);
 
-        // 最左側管口加厚凸緣框
         if (isLeftMouth) {
           fill("#0D3B1E");
           rect(px - 2, py - 3, 12, ph + 6, 2);
@@ -403,16 +415,16 @@ function drawMap(viewWorldW = width) {
       if (tileX + TILE_SIZE > cameraX && tileX < cameraX + viewWorldW) {
         if (tile === 'V') {
           noStroke();
-          fill("#B07D3B"); // 深沙褐色底（與一般流沙呼應但略深，帶神秘感）
+          fill("#B07D3B");
           rect(tileX, tileY, TILE_SIZE, TILE_SIZE);
-          fill("#8C5A1E"); // 暗沙漩渦波紋
+          fill("#8C5A1E");
           let wave = sin(frameCount * 0.12 + col) * 6;
           ellipse(tileX + 20 + wave, tileY + 8, 28, 7);
           ellipse(tileX + 20 - wave, tileY + 24, 22, 6);
           continue;
         }
         if (tile === 'Q') {
-          continue; // 改由下方統一繪製無稜角連續流沙曲面
+          continue;
         }
         if (tile === 'K') {
           noStroke();
@@ -421,7 +433,6 @@ function drawMap(viewWorldW = width) {
           rect(tileX + 2, tileY + 12, 8, 12, 4);
           rect(tileX + 30, tileY + 8, 8, 12, 4);
 
-          // 仙人掌主幹直紋脊線（保留經典仙人掌辨識度）
           fill("#1B4332");
           rect(tileX + 15, tileY + 6, 2, TILE_SIZE - 9, 1);
           rect(tileX + 23, tileY + 6, 2, TILE_SIZE - 9, 1);
@@ -429,19 +440,14 @@ function drawMap(viewWorldW = width) {
           let spikePulse = sin(frameCount * 0.15 + col * 0.5 + row * 0.3);
           let spikeAlpha = map(spikePulse, -1, 1, 120, 255);
 
-          // 細長俐落的純白高光刺針（無外暈、不長頂角，貼合仙人掌輪廓）
           fill(255, 253, 240, spikeAlpha);
-          // 主幹左側刺針
           triangle(tileX + 10, tileY + 7, tileX + 5, tileY + 8.5, tileX + 10, tileY + 10);
           triangle(tileX + 10, tileY + 28, tileX + 5, tileY + 29.5, tileX + 10, tileY + 31);
-          // 主幹右側刺針
           triangle(tileX + 30, tileY + 5, tileX + 35, tileY + 6.5, tileX + 30, tileY + 8);
           triangle(tileX + 30, tileY + 24, tileX + 35, tileY + 25.5, tileX + 30, tileY + 27);
-          // 左右手腕外側刺針
           triangle(tileX + 2, tileY + 16.5, tileX - 3, tileY + 18, tileX + 2, tileY + 19.5);
           triangle(tileX + 38, tileY + 12.5, tileX + 43, tileY + 14, tileX + 38, tileY + 15.5);
 
-          // 柱身表面小刺針高光點（加強整體刺感）
           fill(255, 243, 176, spikeAlpha);
           triangle(tileX + 14, tileY + 13, tileX + 12, tileY + 14, tileX + 14, tileY + 15);
           triangle(tileX + 26, tileY + 19, tileX + 28, tileY + 20, tileX + 26, tileY + 21);
@@ -624,7 +630,6 @@ function drawMap(viewWorldW = width) {
               ? (textures["CASTLE_SLATE_WALL"] || textures["CASTLE_WALL"])
               : ((isW2 && textures["CASTLE_SAND_WALL"]) ? textures["CASTLE_SAND_WALL"] : textures["CASTLE_WALL"]);
             image(tex, tileX, tileY);
-            // 中層左右兩側自動加裝飾小拱窗（深板岩城堡帶幽藍符文窗光）
             if (!isBottom && (isLeftEdge || isRightEdge)) {
               fill(isSecretCastle ? "#112A38" : (isW2 ? "#2B190E" : "#1A0505"));
               rect(tileX + 13, tileY + 10, 14, 20, 7, 7, 0, 0);
@@ -635,7 +640,6 @@ function drawMap(viewWorldW = width) {
     }
   }
 
-  // === 連續無稜角流沙曲面繪製（固定 X 網格＋餘弦平滑插值，零回彈、零縫隙） ===
   let startC = max(0, floor(cameraX / TILE_SIZE) - 2);
   let endC = min(levelMap[0].length - 1, ceil((cameraX + viewWorldW) / TILE_SIZE) + 2);
 
@@ -660,7 +664,6 @@ function drawMap(viewWorldW = width) {
     }
   }
 
-  // 兩輪鄰域平滑（天花板垂直沙瀑鎖定 topY = 0 不變形）
   for (let pass = 0; pass < 2; pass++) {
     let nextTop = {};
     for (let cStr in moundTopY) {
@@ -690,23 +693,19 @@ function drawMap(viewWorldW = width) {
         maxBotY = max(maxBotY, moundBotY[sc]);
       }
 
-      // 檢查左右相鄰格是否為實心硬方塊（決定沙坑邊緣要貼平牆面還是自然斜落到地面）
       let checkRowL = constrain(floor(moundTopY[runStart] / TILE_SIZE), 0, levelMap.length - 1);
       let checkRowR = constrain(floor(moundTopY[runEnd] / TILE_SIZE), 0, levelMap.length - 1);
       let leftWall = (runStart > 0 && levelMap[checkRowL][runStart - 1] !== ' ' && levelMap[checkRowL][runStart - 1] !== 'Q');
       let rightWall = (runEnd + 1 < levelMap[0].length && levelMap[checkRowR][runEnd + 1] !== ' ' && levelMap[checkRowR][runEnd + 1] !== 'Q');
 
-      // 取得每一欄中心的目標高度，並推算左右邊界高度
       let getSampleY = (sc) => moundTopY[sc];
       let leftBoundaryY = (leftWall || hasCeilingPour[runStart]) ? moundTopY[runStart] : maxBotY;
       let rightBoundaryY = (rightWall || hasCeilingPour[runEnd]) ? moundTopY[runEnd] : maxBotY;
 
-      // 建立高密度單調遞增 X 節點陣列（保證 X 座標 100% 鎖死在格子內，絕不鼓出或內縮）
       let pts = [];
       pts.push({ x: runStart * TILE_SIZE, y: leftBoundaryY });
       for (let sc = runStart; sc <= runEnd; sc++) {
         if (hasCeilingPour[sc]) {
-          // 垂直沙瀑頂端保持水平直線，絕不長貓耳朵
           pts.push({ x: sc * TILE_SIZE, y: moundTopY[sc] });
           pts.push({ x: (sc + 1) * TILE_SIZE, y: moundTopY[sc] });
         } else {
@@ -715,7 +714,6 @@ function drawMap(viewWorldW = width) {
       }
       pts.push({ x: (runEnd + 1) * TILE_SIZE, y: rightBoundaryY });
 
-      // 用餘弦平滑插值（Cosine Interpolation）把相鄰節點細分成 8 段平滑斜坡（無任何 overshoot 回彈）
       fill("#D4A373");
       beginShape();
       vertex(runStart * TILE_SIZE, maxBotY);
@@ -735,7 +733,6 @@ function drawMap(viewWorldW = width) {
       vertex((runEnd + 1) * TILE_SIZE, maxBotY);
       endShape(CLOSE);
 
-      // 沙體內部的流動細沙波紋
       fill(250, 237, 205, 165);
       for (let sc = runStart; sc <= runEnd; sc++) {
         let wave = sin(frameCount * 0.09 + sc * 0.7) * 3;
