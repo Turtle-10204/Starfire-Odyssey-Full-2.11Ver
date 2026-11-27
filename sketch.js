@@ -331,7 +331,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     updateCactusNeedles();
     chronoFieldActive = (powerLevel === 3 && powerType === "chrono" && inputDash && gameState === "PLAYING");
 
-    // <--- 新增：2-4 頭燈拾取與火把系統更新
     if (currentWorld === 2 && currentLevel === 4 && gameState === "PLAYING") {
       updateMinerLampAndTorches();
     }
@@ -380,14 +379,12 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       }
     }
 
-    // 自暈 3 秒時無法操作移動，只能等暈眩結束或受傷解除
     if (playerStunTimer > 0) {
       playerStunTimer -= deltaTime;
       if (playerStunTimer < 0) playerStunTimer = 0;
       currentSprintBonus = 0;
       resetWallJumpState();
     } else if (wallJumpLockTimer > 0) {
-      // 蹬牆跳後 8 幀輸入鎖定：維持朝反方向水平推力 5，禁止按反方向鍵抵銷
       moveX = wallJumpImpulseVX;
       facingDirection = wallJumpImpulseVX > 0 ? 1 : -1;
     } else if (!isAttacking) {
@@ -414,7 +411,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       }
     }
 
-    // 防穿牆保護：水平移動或蹬牆推力若撞入實體磚塊，逐步貼齊牆緣並清除推力
     if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
       characterX -= totalDX;
       let stepSign = Math.sign(totalDX);
@@ -441,7 +437,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       if (footRow >= 0 && footRow < levelMap.length && col >= 0 && col < levelMap[0].length) {
         let belowTile = levelMap[footRow][col];
         if ((belowTile === 'p' && !window.isInMinerSupplyRoom) || (belowTile === 'u' && window.isInMinerSupplyRoom)) {
-          // 找出同一根垂直水管左右兩欄，自動對齊該水管正中央
           let leftCol = col;
           while (leftCol > 0 && levelMap[footRow][leftCol - 1] === belowTile) leftCol--;
           let rightCol = col;
@@ -485,7 +480,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     velocityY = 5;
     characterY += velocityY;
 
-    // 自動找旗桿最頂端與底部位置，讓綠旗同步往下滑動
     let flagCol = floor(characterX / TILE_SIZE);
     let topFlagRow = 3;
     let bottomFlagRow = 11;
@@ -505,7 +499,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     let maxFlagDrop = max(0, (bottomFlagRow - topFlagRow) * TILE_SIZE);
     flagDropY = constrain(characterY - topFlagRow * TILE_SIZE, 0, maxFlagDrop);
 
-    // 精準偵測旗桿下方地板高度，雙腳踩在草地表面不再陷進地板
     let groundTopY = (bottomFlagRow + 1) * TILE_SIZE - currentHitboxH / 2 - 0.1;
     if (checkCollision(characterX, characterY, currentHitboxW, currentHitboxH)) {
       let bottomTileRow = floor((characterY + currentHitboxH / 2) / TILE_SIZE);
@@ -556,7 +549,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
           }
         }
         castleRoofTopY = topCastleRow * TILE_SIZE;
-        // <--- 新增：2-4 過關抵達城堡時，頭燈與剩余火把化為白煙消散
         if (currentWorld === 2 && currentLevel === 4 && (hasMinerHeadlamp || torchCount > 0)) {
           for (let s = 0; s < 14; s++) {
             endClearBonusSmoke.push({
@@ -577,11 +569,13 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       }
     } else {
       if (millis() - stateTimer > 1500) {
+        // 通關後清除本關所有檢查點（含秘室檢查點）
+        if (typeof resetAllCheckpoints === "function") resetAllCheckpoints();
+
         let curId = `${currentWorld}-${currentLevel}`;
         let node = mapNodesData[curId];
         if (node) {
           node.cleared = true;
-          // 判斷是否為秘密終點過關（後續關卡會設定 isSecretClear = true）
           let unlockList = (typeof isSecretClear !== "undefined" && isSecretClear && node.nextSecret)
             ? node.nextSecret
             : (node.nextNormal || []);
@@ -593,13 +587,11 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
           }
         }
 
-        // 通過任意關卡後，沙漠補給屋重新開門營業！
         if (mapNodesData["2-SHOP"]) {
           mapNodesData["2-SHOP"].isOpen = true;
         }
 
         if (curId === "1-4") {
-          // 回到 World 1 大地圖並播放 1-4 城堡白旗 → 聚光燈轉場動畫
           currentWorld = 1;
           selectedMapNode = "1-4";
           worldTransition = {
@@ -614,7 +606,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
         } else if (curId === "2-5") {
           gameState = "ALL_CLEAR";
         } else {
-          // 自動將游標移到剛解鎖的下一關
           let nextTargets = (typeof isSecretClear !== "undefined" && isSecretClear && node && node.nextSecret)
             ? node.nextSecret
             : (node && node.nextNormal ? node.nextNormal : []);
@@ -627,14 +618,13 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     }
 
   } else if (gameState === "ENTERING_PIPE") {
-    // 1-2 橫管：先對齊橫管中心地板高度，再平滑走進管子中心（管口裁切防穿模）
     facingDirection = 1;
     pipeClipDir = "LEFT_OF_X";
     if (pipeAlignActive && abs(characterY - pipeTargetY) > 1.5) {
       moveX = 1.2;
       characterY += Math.sign(pipeTargetY - characterY) * min(2.0, abs(pipeTargetY - characterY));
       characterX += moveX;
-      stateTimer = millis(); // 對齊高度後再開始計算進管時間
+      stateTimer = millis();
     } else {
       pipeAlignActive = false;
       characterY = pipeTargetY;
@@ -647,12 +637,10 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     }
     if (millis() - stateTimer > 1050) {
       resetPipeTransitionState();
-      // 切換到 MAP_1_2
       is1_2Intro = false;
       loadLevelMap(MAP_1_2);
       spawnLevelEnemies(2);
 
-      // 在 1-2 地下場景左側地面上放一根「地下入口水管」，讓主角從管口鑽出來
       let pipeCol = 2;
       let groundRow = 13;
       for (let r = levelMap.length - 1; r >= 0; r--) {
@@ -678,14 +666,13 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       gameState = "PLAYING";
     }
   } else if (gameState === "ENTERING_SUPPLY_PIPE") {
-    // 2-4 進入補給室：先自動水平走到水管正中心，再垂直下沉進管（管口裁切防穿模）
     pipeClipDir = "ABOVE_Y";
     if (pipeAlignActive && abs(characterX - pipeTargetX) > 1.5) {
       let stepX = Math.sign(pipeTargetX - characterX) * min(2.2, abs(pipeTargetX - characterX));
       facingDirection = stepX > 0 ? 1 : -1;
       moveX = stepX;
       characterX += stepX;
-      stateTimer = millis(); // 走到中心後再開始下沉計時
+      stateTimer = millis();
     } else {
       pipeAlignActive = false;
       characterX = pipeTargetX;
@@ -726,7 +713,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       floatingTexts.push({ text: "礦工裝備補給站（全亮區域）", x: characterX, y: 4.5 * TILE_SIZE, vy: -1, life: 95, isOneUp: true });
     }
   } else if (gameState === "EXITING_SUPPLY_PIPE") {
-    // 2-4 離開補給室：先自動水平走到水管正中心，再垂直下沉進管（管口裁切防穿模）
     pipeClipDir = "ABOVE_Y";
     if (pipeAlignActive && abs(characterX - pipeTargetX) > 1.5) {
       let stepX = Math.sign(pipeTargetX - characterX) * min(2.2, abs(pipeTargetX - characterX));
@@ -787,31 +773,8 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     characterY += 1.2;
 
     if (elapsed > 550) {
-      is2_1SubSecret = true;
-      let subData = buildWorld2SubSecretMap();
-      loadLevelMap(subData.mapStrings);
-      movingPlatforms = [];
-      items = [];
-      coins = [];
-      bumpingTiles = [];
-      playerFireballs = [];
-      cactusNeedles = [];
-      enemies = [];
-      for (let sp of subData.enemySpawns) {
-        let h = sp.type === "goomba" ? 30 : 38;
-        enemies.push({
-          type: sp.type, x: sp.col * TILE_SIZE + 20, y: sp.row * TILE_SIZE - h / 2 - 12,
-          baseY: sp.row * TILE_SIZE - h / 2 - 24, w: 30, h: h, vx: -1.4, vy: 0,
-          shellMoving: false, dead: false, flyPhase: random(TWO_PI), stunTimer: 0, knockbackX: 0
-        });
-      }
-      characterX = 3 * TILE_SIZE;
-      characterY = 4 * TILE_SIZE;
-      velocityY = 0;
-      cameraX = 0;
-      quicksandFadeInTimer = millis();
-      gameState = "PLAYING";
-      floatingTexts.push({ text: "被流沙吸入地下秘室！尋找紅色終點旗！", x: characterX, y: characterY - 30, vy: -1, life: 110, isOneUp: true });
+      // 呼叫共用進入秘室函式（會自動清空 movingPlatforms 並讀取秘室資料起點）
+      enterSubSecret(null, null, true);
     }
   }
 
@@ -837,13 +800,11 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     }
   }
 
-  // --- 2. 物理系統與碰撞偵測 ---
   if (isExitingCeilingPipe) {
     moveX = 0;
     velocityY = 0;
-    characterY += 1.4; // 慢慢從天花板水管往下鑽出
+    characterY += 1.4;
 
-    // 自動偵測天花板水管最底端管口的 Y 座標
     let pipeCol = floor(characterX / TILE_SIZE);
     let mouthBottomY = 4 * TILE_SIZE;
     for (let r = 2; r < levelMap.length; r++) {
@@ -857,7 +818,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     pipeMouthY = mouthBottomY;
     pipeClipDir = "BELOW_Y";
 
-    // 等到主角頭頂完全離開管口下方，就解除動畫並自然落下
     let headTopY = characterY - currentHitboxH / 2;
     if (headTopY >= mouthBottomY + 2) {
       isExitingCeilingPipe = false;
@@ -880,7 +840,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
     characterY += velocityY; 
     isOnGround = false; 
 
-    // 僅在有實心天花板的室內／地下／秘室關卡防止跳出頂端走「員工通道」，露天關卡不限制跳躍高度
     let hasSolidCeilingMap = (typeof is2_1SubSecret !== "undefined" && is2_1SubSecret) ||
                              (currentWorld === 1 && currentLevel === 2 && !is1_2Intro) ||
                              (currentLevel === 4);
@@ -911,7 +870,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
         isShortJump = false; 
         featherFlapsLeft = 2;
 
-        // 每 10 幀紀錄一次地面安全座標供時光回溯使用
         if (gameState === "PLAYING" && frameCount % 10 === 0) {
           safePositionHistory.push({ x: characterX, y: characterY });
           if (safePositionHistory.length > 12) safePositionHistory.shift();
@@ -966,18 +924,15 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       }
     }
 
-    // --- 抓牆（Wall Slide）與離牆補償計時器更新 ---
     if (isOnGround) {
       isWallSliding = false;
       wallSlideDir = 0;
       wallJumpGraceTimer = 0;
       lastWallDir = 0;
     } else {
-      // 呼叫 checkCollision 實際探測左右實體牆壁邊緣（不依賴 facingDirection，且不會誤判移動平台）
       let touchWallLeft = checkCollision(characterX - 2, characterY, currentHitboxW, currentHitboxH);
       let touchWallRight = checkCollision(characterX + 2, characterY, currentHitboxW, currentHitboxH);
 
-      // 允許漂浮（isGliding）期間碰牆時直接解除漂浮並銜接滑落動作
       let canWallSlide = (
         gameState === "PLAYING" &&
         !showSettingsModal &&
@@ -995,11 +950,10 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
         isWallSliding = true;
         wallSlideDir = touchWallLeft ? -1 : 1;
         lastWallDir = wallSlideDir;
-        wallJumpGraceTimer = 6; // 抓牆中維持 6 幀離牆寬容補償
+        wallJumpGraceTimer = 6;
         if (velocityY > 2.5) {
-          velocityY = 2.5; // 滑牆速度上限 2.5 像素/幀，不設時間限制
+          velocityY = 2.5;
         }
-        // 每 2 幀沿著貼牆那一側從上到下噴出白色細小粉塵（依角色大小調整）
         if (frameCount % 2 === 0) {
           let wallContactX = characterX + wallSlideDir * (currentHitboxW / 2);
           spawnWallSlideDust(wallContactX, characterY, currentHitboxH, wallSlideDir, isBig);
@@ -1017,7 +971,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
       }
     }
 
-    // World 2 流沙 ('Q') 與仙人掌刺柱 ('K') 互動
     if (currentWorld === 2 && gameState === "PLAYING") {
       let pCol = floor(characterX / TILE_SIZE);
       let footRow = floor((characterY + currentHitboxH / 2 - 4) / TILE_SIZE);
@@ -1025,12 +978,10 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
 
       if (footRow >= 0 && footRow < levelMap.length && pCol >= 0 && pCol < levelMap[0].length) {
         if (levelMap[footRow][pCol] === 'V' && !is2_1SubSecret) {
-          // 跟一般流沙一樣慢慢往下沉（按跳還可以逃出來）
           if (velocityY > 0.5) velocityY = 0.5;
           isOnGround = true;
           isActionLocked = false;
 
-          // 只有整個人沉到流沙格子最底部（第 14 排底部）時，啟動平滑轉場進入地下密室
           let bottomOfSandY = (footRow + 1) * TILE_SIZE;
           if (characterY + currentHitboxH / 2 >= bottomOfSandY - 2 && gameState === "PLAYING") {
             gameState = "ENTERING_QUICKSAND";
@@ -1040,7 +991,6 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
           }
         }
         if (levelMap[footRow][pCol] === 'Q') {
-          // 計算與 drawMap() 完全同步的平滑沙丘表面高度
           let getColSandTopY = (colIdx) => {
             if (colIdx < 0 || colIdx >= levelMap[0].length) return (footRow + 1) * TILE_SIZE;
             for (let rr = 0; rr < levelMap.length; rr++) {
