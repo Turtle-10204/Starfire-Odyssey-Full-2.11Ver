@@ -25,6 +25,13 @@ function resetAllCheckpoints() {
   };
 }
 
+// 計算動態地圖高度下的安全預設出生 Y（15 列時維持 100px；若地圖加高到 >15 列，自動貼齊底部地板上方）
+function getDefaultMapSpawnY() {
+  let rows = (typeof levelMap !== "undefined" && Array.isArray(levelMap) && levelMap.length > 0) ? levelMap.length : 15;
+  if (rows <= 15) return 100;
+  return (rows - 12.5) * TILE_SIZE;
+}
+
 // 共用函式：載入 2-1 地下秘室（首次墜入流沙與秘室內死亡重生皆呼叫此函式）
 function enterSubSecret(spawnX = null, spawnY = null, showEnterText = true) {
   is2_1SubSecret = true;
@@ -53,18 +60,26 @@ function enterSubSecret(spawnX = null, spawnY = null, showEnterText = true) {
     });
   }
 
-  // 從地圖資料讀取秘室起點（支援頂層 spawnCol/spawnRow 或 config.spawnCol/spawnRow）
+  // 從地圖資料讀取秘室起點（支援頂層 spawnCol/spawnRow 或 config.spawnCol/spawnRow；未指定時對齊底部地板上方）
   let defaultSpawnCol = (subData.spawnCol !== undefined)
     ? subData.spawnCol
     : (subData.config && subData.config.spawnCol !== undefined ? subData.config.spawnCol : 3);
+  let fallbackSpawnRow = max(4, levelMap.length - 11);
   let defaultSpawnRow = (subData.spawnRow !== undefined)
     ? subData.spawnRow
-    : (subData.config && subData.config.spawnRow !== undefined ? subData.config.spawnRow : 4);
+    : (subData.config && subData.config.spawnRow !== undefined ? subData.config.spawnRow : fallbackSpawnRow);
 
   characterX = (spawnX !== null && spawnX !== undefined) ? spawnX : (defaultSpawnCol * TILE_SIZE + TILE_SIZE / 2);
   characterY = (spawnY !== null && spawnY !== undefined) ? spawnY : (defaultSpawnRow * TILE_SIZE);
   velocityY = 0;
-  cameraX = max(0, characterX - (width / (typeof getEffectiveViewZoom === "function" ? getEffectiveViewZoom() : 1)) / 3);
+
+  let z = (typeof getEffectiveViewZoom === "function") ? getEffectiveViewZoom() : 1;
+  let viewWorldW = width / z;
+  let viewWorldH = height / z;
+  cameraX = max(0, characterX - viewWorldW / 3);
+  if (typeof cameraY !== "undefined") {
+    cameraY = levelMap.length * TILE_SIZE - viewWorldH;
+  }
 
   // 若是從秘室檢查點重生，將該欄的 'R' 還原為已啟動的 'r'
   if (window.subSecretCheckpointState && window.subSecretCheckpointState.active) {
@@ -154,6 +169,7 @@ function startLevel(levelNum, resetRunStats, keepPowerup = false) {
   starTimer = 0;
   currentSprintBonus = 0;
   knockbackVX = 0;
+  mobileDashLocked = false;
   bumpingTiles = [];
   playerFireballs = [];
   enemies = [];
@@ -193,7 +209,6 @@ function startLevel(levelNum, resetRunStats, keepPowerup = false) {
     levelTimer = w2Data.config.timeLimit;
 
     if (respawnInSubSecret) {
-      // 留在 2-1 秘室重生（有秘室檢查點用檢查點座標，否則回秘室起點，不覆蓋主關卡檢查點）
       let rx = useSubCheckpoint ? window.subSecretCheckpointState.x : null;
       let ry = useSubCheckpoint ? window.subSecretCheckpointState.y : null;
       enterSubSecret(rx, ry, false);
@@ -241,7 +256,7 @@ function startLevel(levelNum, resetRunStats, keepPowerup = false) {
           lastAttack: "",
           segments: [],
           headX: arenaRightX - 180,
-          headY: 9 * TILE_SIZE,
+          headY: (levelMap.length - 6) * TILE_SIZE,
           vx: 0,
           vy: 0,
           dir: -1,
@@ -284,9 +299,10 @@ function startLevel(levelNum, resetRunStats, keepPowerup = false) {
       is1_2Intro = false;
       loadLevelMap(MAP_1_3);
       spawnLevelEnemies(3);
+      let rowOffset = max(0, levelMap.length - 15);
       movingPlatforms = [
-        { x: 102 * TILE_SIZE, y: 10 * TILE_SIZE, w: 3 * TILE_SIZE, h: 16, minX: 100 * TILE_SIZE, maxX: 112 * TILE_SIZE, speed: 2.2, dx: 0 },
-        { x: 122 * TILE_SIZE, y: 8 * TILE_SIZE,  w: 3 * TILE_SIZE, h: 16, minX: 118 * TILE_SIZE, maxX: 132 * TILE_SIZE, speed: -2.5, dx: 0 }
+        { x: 102 * TILE_SIZE, y: (10 + rowOffset) * TILE_SIZE, w: 3 * TILE_SIZE, h: 16, minX: 100 * TILE_SIZE, maxX: 112 * TILE_SIZE, speed: 2.2, dx: 0 },
+        { x: 122 * TILE_SIZE, y: (8 + rowOffset) * TILE_SIZE,  w: 3 * TILE_SIZE, h: 16, minX: 118 * TILE_SIZE, maxX: 132 * TILE_SIZE, speed: -2.5, dx: 0 }
       ];
     } else {
       is1_2Intro = false;
@@ -331,7 +347,7 @@ function startLevel(levelNum, resetRunStats, keepPowerup = false) {
 
   if (!respawnInSubSecret) {
     characterX = 100;
-    characterY = 100;
+    characterY = getDefaultMapSpawnY();
     if (currentWorld === 2 && levelNum === 4 && window.isInMinerSupplyRoom) {
       characterX = 2.5 * TILE_SIZE;
       characterY = 2.2 * TILE_SIZE;
@@ -348,6 +364,13 @@ function startLevel(levelNum, resetRunStats, keepPowerup = false) {
     }
   }
   velocityY = 0;
+
+  // 進入關卡時初始化垂直攝影機位置，確保一開始就對準底部地板與主角
+  if (typeof cameraY !== "undefined") {
+    let z = (typeof getEffectiveViewZoom === "function") ? getEffectiveViewZoom() : 1;
+    let viewWorldH = height / z;
+    cameraY = levelMap.length * TILE_SIZE - viewWorldH;
+  }
 
   if (resetRunStats) {
     score = 0;
