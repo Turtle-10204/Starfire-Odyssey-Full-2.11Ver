@@ -495,9 +495,14 @@ function enterSelectedMapNode() {
     playSFX("mapMove");
     return;
   }
-  // 每次從大地圖重新進入關卡，一律清空上一輪的中繼存檔點與秘密通關標記
-  checkpointState.active = false;
+  // 每次從大地圖重新進入關卡，一律清空主關卡與秘室兩份中繼存檔點，以及秘密通關標記
+  if (typeof resetAllCheckpoints === "function") {
+    resetAllCheckpoints();
+  } else {
+    checkpointState.active = false;
+  }
   isSecretClear = false;
+  is2_1SubSecret = false;
 
   let parts = node.id.split("-");
   currentWorld = int(parts[0]);
