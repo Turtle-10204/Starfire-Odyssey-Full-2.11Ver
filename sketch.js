@@ -1077,6 +1077,33 @@ function updatePlayerPhysicsAndInput(viewWorldW) {
   };
 }
 
+let cameraY = 0;
+
+function updateCameraPosition(viewWorldW, viewWorldH) {
+  let maxCameraX = max(0, levelMap[0].length * TILE_SIZE - viewWorldW);
+  cameraX = constrain(characterX - viewWorldW / 3, 0, maxCameraX);
+
+  let mapPixelH = levelMap.length * TILE_SIZE;
+  let bottomAlignedCamY = mapPixelH - viewWorldH; // 貼齊地板時的基準 cameraY
+
+  // 判斷是否為有實心天花板的封閉室內／地下／秘室關卡
+  let hasSolidCeilingMap = (typeof is2_1SubSecret !== "undefined" && is2_1SubSecret) ||
+                           (currentWorld === 1 && currentLevel === 2 && !is1_2Intro) ||
+                           (currentLevel === 4);
+
+  // 開闊關卡允許往負 Y 高空延伸視野（最高可往上多看 12 格 = 480px），封閉關卡鎖在 0
+  let minCameraY = hasSolidCeilingMap ? min(0, bottomAlignedCamY) : min(-12 * TILE_SIZE, bottomAlignedCamY);
+  let maxCameraY = bottomAlignedCamY;
+
+  // 當主角跳高到畫面偏上方（螢幕 38% 處）時，攝影機平滑往上跟隨；落地時平滑回到地板基準線
+  let targetCamY = constrain(characterY - viewWorldH * 0.42, minCameraY, maxCameraY);
+  if (abs(cameraY - targetCamY) > 600) {
+    cameraY = targetCamY;
+  } else {
+    cameraY = lerp(cameraY, targetCamY, 0.14);
+  }
+}
+
 function draw() { 
   if (controlMode === "MOBILE") {
     updateMobileTouchState();
@@ -1146,11 +1173,11 @@ function draw() {
   // --- 0.5 秒時間靜止變身／縮小演出 (TRANSFORM_FREEZE) ---
   if (gameState === "TRANSFORM_FREEZE") {
     transformTimer -= deltaTime;
+    updateCameraPosition(viewWorldW, viewWorldH);
 
     push();
     scale(z);
-    let mapOffsetY = viewWorldH - (levelMap.length * TILE_SIZE);
-    translate(-cameraX, mapOffsetY);
+    translate(-cameraX, -cameraY);
 
     drawWorld2AtmosphereAndLandmarks();
     drawMap(viewWorldW);
@@ -1208,8 +1235,6 @@ function draw() {
     }
     return;
   }
-
-  
 
   let moveX = 0, isBig = (powerLevel >= 2);
   let currentHitboxW = isBig ? BIG_HITBOX_W : BASE_HITBOX_W;
@@ -1309,7 +1334,7 @@ function draw() {
     currentFrameInterval = 60; 
   }
 
-  if (gameState !== "ITEM_GUIDE" && !showSettingsModal  && millis() - lastFrameTime >= currentFrameInterval) { 
+  if (gameState !== "ITEM_GUIDE" && !showSettingsModal && millis() - lastFrameTime >= currentFrameInterval) { 
     currentFrame++;
     lastFrameTime = millis(); 
     
@@ -1420,14 +1445,13 @@ function draw() {
           } else if (tile === 'M' || tile === '*') {
             levelMap[r][c] = 'E';
             spawnPowerupFromBlock(tile, c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE - TILE_SIZE / 2);
+          } else if (tile === 't') {
+            levelMap[r][c] = 'E';
+            addBumpTile(r, c);
+            torchCount += 16;
+            playSFX("powerup");
+            floatingTexts.push({ text: "獲得 16 根火把！", x: c * TILE_SIZE - 30, y: r * TILE_SIZE - 20, vy: -1.5, life: 70, isOneUp: true });
           }
-          else if (tile === 't') {
-          levelMap[r][c] = 'E';
-          addBumpTile(r, c);
-          torchCount += 16;
-          playSFX("powerup");
-          floatingTexts.push({ text: "獲得 16 根火把！", x: c * TILE_SIZE - 30, y: r * TILE_SIZE - 20, vy: -1.5, life: 70, isOneUp: true });
-        }
           break; 
         }
       }
@@ -1458,17 +1482,15 @@ function draw() {
     hasFiredThisAttack = true; 
   }
 
-  // --- 5. 攝影機跟隨（依視角縮放自動計算視野寬度） ---
-  let maxCameraX = max(0, levelMap[0].length * TILE_SIZE - viewWorldW);
-  cameraX = constrain(characterX - viewWorldW / 3, 0, maxCameraX);
+  // --- 5. 攝影機跟隨（支援水平 cameraX + 垂直 cameraY 動態高度） ---
+  updateCameraPosition(viewWorldW, viewWorldH);
 
   // --- 6. 繪製世界（套用視角縮放） ---
   push(); 
   scale(z);
-  let mapOffsetY = viewWorldH - (levelMap.length * TILE_SIZE);
-  translate(-cameraX, mapOffsetY); 
+  translate(-cameraX, -cameraY); 
 
-  drawWorld2AtmosphereAndLandmarks(); // 畫在所有磚塊與角色後方
+  drawWorld2AtmosphereAndLandmarks();
   drawMap(viewWorldW);
 
   if (castleFlagRaised) {
@@ -1535,7 +1557,6 @@ function draw() {
     let realFeetOffsetFromCanvasBottom = frameBottomPad * displayScale;
     let drawCenterY = hitboxBottomY - (frameHeight * displayScale) / 2 + realFeetOffsetFromCanvasBottom;
 
-    // 進出水管時啟用 Canvas 管口裁切遮罩（身體跨過管口線即裁切隱藏，徹底零穿模）
     let usePipeClip = (
       pipeClipDir !== "NONE" &&
       (gameState === "ENTERING_PIPE" ||
@@ -1548,11 +1569,11 @@ function draw() {
       drawingContext.save();
       drawingContext.beginPath();
       if (pipeClipDir === "LEFT_OF_X") {
-        drawingContext.rect(cameraX - 200, -500, (pipeMouthX - (cameraX - 200)), levelMap.length * TILE_SIZE + 1000);
+        drawingContext.rect(cameraX - 200, -1000, (pipeMouthX - (cameraX - 200)), levelMap.length * TILE_SIZE + 2000);
       } else if (pipeClipDir === "ABOVE_Y") {
-        drawingContext.rect(cameraX - 200, -500, viewWorldW + 400, pipeMouthY + 500);
+        drawingContext.rect(cameraX - 200, -1000, viewWorldW + 400, pipeMouthY + 1000);
       } else if (pipeClipDir === "BELOW_Y") {
-        drawingContext.rect(cameraX - 200, pipeMouthY, viewWorldW + 400, levelMap.length * TILE_SIZE + 500);
+        drawingContext.rect(cameraX - 200, pipeMouthY, viewWorldW + 400, levelMap.length * TILE_SIZE + 1000);
       }
       drawingContext.clip();
     }
@@ -1608,7 +1629,6 @@ function draw() {
     }
 
     if (activeCharacterId === 1) {
-      // 繪製解鎖的新角色「沙漠遊俠」造型
       push();
       translate(characterX, hitboxBottomY);
       scale(facingDirection * (isBig ? 1.35 : 1.0), (isBig ? 1.35 : 1.0) * (isCrouching ? 0.65 : 1.0));
@@ -1634,7 +1654,7 @@ function draw() {
       }
       image(activeSpriteSheet, 0, 0, frameWidth, frameHeight, currentFrame * frameWidth, 0, frameWidth, frameHeight); 
       noTint();
-      colorMode(RGB, 255); // 還原預設 RGB 模式
+      colorMode(RGB, 255);
       pop(); 
     }
 
@@ -1642,7 +1662,6 @@ function draw() {
       drawingContext.restore();
     }
 
-    // 主角自暈 3 秒期間：頭頂畫出 3 顆旋轉金星
     if (playerStunTimer > 0) {
       push();
       translate(characterX, characterY - currentHitboxH / 2 - 14);
@@ -1675,44 +1694,43 @@ function draw() {
 
   updateAndDrawFloatingTexts();
 
-  // 2-4 黑暗礦坑頭燈裝備架、火把與黑暗視野遮罩
   if (currentWorld === 2 && currentLevel === 4) {
     drawMinerLampAndTorches(viewWorldW, viewWorldH);
   }
-  // 進出水管與流沙黑幕平滑轉場，消除畫面硬切割裂感
-let pipeFadeAlpha = 0;
-if (gameState === "ENTERING_PIPE") {
-  let elapsed = millis() - stateTimer;
-  if (elapsed > 650) {
-    pipeFadeAlpha = map(elapsed, 650, 1100, 0, 255, true);
-  }
-} else if (gameState === "ENTERING_SUPPLY_PIPE" || gameState === "EXITING_SUPPLY_PIPE") {
-  let elapsed = millis() - stateTimer;
-  if (elapsed > 250) {
-    pipeFadeAlpha = map(elapsed, 250, 550, 0, 255, true);
-  }
-} else if (gameState === "ENTERING_QUICKSAND") {
-  let elapsed = millis() - stateTimer;
-  if (elapsed > 150) {
-    pipeFadeAlpha = map(elapsed, 150, 550, 0, 255, true);
-  }
-} else if (isExitingPipe) {
-  let elapsed = millis() - stateTimer;
-  if (elapsed < 350) {
-    pipeFadeAlpha = map(elapsed, 0, 350, 255, 0, true);
-  }
-} else if (typeof quicksandFadeInTimer !== "undefined" && millis() - quicksandFadeInTimer < 400) {
-  pipeFadeAlpha = map(millis() - quicksandFadeInTimer, 0, 400, 255, 0, true);
-}
 
-if (pipeFadeAlpha > 0) {
-  push();
-  resetMatrix();
-  noStroke();
-  fill(0, 0, 0, pipeFadeAlpha);
-  rect(0, 0, width, height);
-  pop();
-}
+  let pipeFadeAlpha = 0;
+  if (gameState === "ENTERING_PIPE") {
+    let elapsed = millis() - stateTimer;
+    if (elapsed > 650) {
+      pipeFadeAlpha = map(elapsed, 650, 1100, 0, 255, true);
+    }
+  } else if (gameState === "ENTERING_SUPPLY_PIPE" || gameState === "EXITING_SUPPLY_PIPE") {
+    let elapsed = millis() - stateTimer;
+    if (elapsed > 250) {
+      pipeFadeAlpha = map(elapsed, 250, 550, 0, 255, true);
+    }
+  } else if (gameState === "ENTERING_QUICKSAND") {
+    let elapsed = millis() - stateTimer;
+    if (elapsed > 150) {
+      pipeFadeAlpha = map(elapsed, 150, 550, 0, 255, true);
+    }
+  } else if (isExitingPipe) {
+    let elapsed = millis() - stateTimer;
+    if (elapsed < 350) {
+      pipeFadeAlpha = map(elapsed, 0, 350, 255, 0, true);
+    }
+  } else if (typeof quicksandFadeInTimer !== "undefined" && millis() - quicksandFadeInTimer < 400) {
+    pipeFadeAlpha = map(millis() - quicksandFadeInTimer, 0, 400, 255, 0, true);
+  }
+
+  if (pipeFadeAlpha > 0) {
+    push();
+    resetMatrix();
+    noStroke();
+    fill(0, 0, 0, pipeFadeAlpha);
+    rect(0, 0, width, height);
+    pop();
+  }
 
   pop(); 
 
