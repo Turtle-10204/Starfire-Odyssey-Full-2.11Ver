@@ -612,23 +612,31 @@ function drawMap(viewWorldW = width) {
           let isCenterDoor = (row >= 11 && !isLeftEdge && !isRightEdge &&
                               col >= 2 && levelMap[row][col - 2] === 'C' &&
                               col + 2 < levelMap[0].length && levelMap[row][col + 2] === 'C');
-          let isSecretCastle = (typeof is2_1SubSecret !== "undefined" && is2_1SubSecret);
+
+          // 第一世界強制維持原本紅磚城堡，絕不套用第二世界砂岩或秘室深板岩貼圖
           let isW2 = (currentWorld === 2);
+          let isSecretCastle = (isW2 && typeof is2_1SubSecret !== "undefined" && is2_1SubSecret);
 
           if (isTop) {
-            let tex = isSecretCastle
-              ? (textures["CASTLE_SLATE_TOP"] || textures["CASTLE_TOP"])
-              : ((isW2 && textures["CASTLE_SAND_TOP"]) ? textures["CASTLE_SAND_TOP"] : textures["CASTLE_TOP"]);
+            let tex = !isW2
+              ? textures["CASTLE_TOP"]
+              : (isSecretCastle
+                  ? (textures["CASTLE_SLATE_TOP"] || textures["CASTLE_TOP"])
+                  : (textures["CASTLE_SAND_TOP"] || textures["CASTLE_TOP"]));
             image(tex, tileX, tileY);
           } else if (isCenterDoor) {
-            let tex = isSecretCastle
-              ? (textures["CASTLE_SLATE_DOOR"] || textures["CASTLE_DOOR"])
-              : ((isW2 && textures["CASTLE_SAND_DOOR"]) ? textures["CASTLE_SAND_DOOR"] : textures["CASTLE_DOOR"]);
+            let tex = !isW2
+              ? textures["CASTLE_DOOR"]
+              : (isSecretCastle
+                  ? (textures["CASTLE_SLATE_DOOR"] || textures["CASTLE_DOOR"])
+                  : (textures["CASTLE_SAND_DOOR"] || textures["CASTLE_DOOR"]));
             image(tex, tileX, tileY);
           } else {
-            let tex = isSecretCastle
-              ? (textures["CASTLE_SLATE_WALL"] || textures["CASTLE_WALL"])
-              : ((isW2 && textures["CASTLE_SAND_WALL"]) ? textures["CASTLE_SAND_WALL"] : textures["CASTLE_WALL"]);
+            let tex = !isW2
+              ? textures["CASTLE_WALL"]
+              : (isSecretCastle
+                  ? (textures["CASTLE_SLATE_WALL"] || textures["CASTLE_WALL"])
+                  : (textures["CASTLE_SAND_WALL"] || textures["CASTLE_WALL"]));
             image(tex, tileX, tileY);
             if (!isBottom && (isLeftEdge || isRightEdge)) {
               fill(isSecretCastle ? "#112A38" : (isW2 ? "#2B190E" : "#1A0505"));
